@@ -1,0 +1,22 @@
+{
+  "name": "coder-cli",
+  "version": "0.1.0",
+  "description": "Automated development tooling CLI — bootstraps isolated git-remote sandboxes for AI coding agents",
+  "type": "module",
+  "bin": {
+    "coder": "./bin/coder.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "commander": "^12.1.0",
+    "ora": "^8.1.0",
+    "picocolors": "^1.1.0"
+  }
+}
