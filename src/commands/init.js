@@ -181,6 +181,7 @@ function initDatabase(coderDir) {
         body TEXT,
         status TEXT DEFAULT 'TODO',
         branch TEXT DEFAULT NULL,
+        ticketId TEXT DEFAULT NULL,
         createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
         closedAt TEXT
       );
