@@ -10,13 +10,33 @@ export const TASK_FETCH_HOOK = `#!/usr/bin/env node
  * (Linear, Jira, GitHub Issues, a local file, ...).
  *
  * Contract: the LAST line printed to stdout MUST be a JSON array string,
- * where each item looks like { "title": string, "body"?: string }.
+ * where each item looks like:
+ *   {
+ *     "ticketId"?: string | null,
+ *     "title": string,
+ *     "body"?: string,
+ *     "baseBranch"?: string
+ *   }
+ *
+ * The array MUST be printed on a single line — use JSON.stringify(tasks),
+ * NOT JSON.stringify(tasks, null, 2). Pretty-printed JSON spans multiple
+ * lines, so the last line alone (e.g. "]") is not valid JSON on its own and
+ * \`coder task fetch\` will fail to parse it.
+ *
+ * ticketId is used by \`coder task fetch\` to dedupe/update tasks across
+ * repeated runs. Omit it (or set it to null) if the source has no stable id.
+ *
+ * baseBranch is the branch the sandbox should check out before starting
+ * work on this task (e.g. "main" or "release/2.4") — not a branch name to
+ * create for the task itself.
  */
 
 const tasks = [
   {
+    ticketId: "EXAMPLE-123",
     title: "Example task",
     body: "Replace .coder/hooks/task-fetch.sample with real task-fetching logic.",
+    baseBranch: "main",
   },
 ];
 
@@ -66,7 +86,7 @@ per run, on its own branch, and nothing else.
 
 - **ID**: {{task.id}}
 - **Title**: {{task.title}}
-- **Branch**: {{task.branch}}
+- **Base branch**: {{task.baseBranch}} (check this out before starting work)
 
 ## Description
 

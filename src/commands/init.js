@@ -180,7 +180,7 @@ function initDatabase(coderDir) {
         title TEXT NOT NULL,
         body TEXT,
         status TEXT DEFAULT 'TODO',
-        branch TEXT DEFAULT NULL,
+        baseBranch TEXT DEFAULT NULL,
         ticketId TEXT DEFAULT NULL,
         createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
         closedAt TEXT

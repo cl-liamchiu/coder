@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { registerInitCommand } from "../src/commands/init.js";
+import { registerTaskCommand } from "../src/commands/task/index.js";
 
 const program = new Command();
 
@@ -10,5 +11,6 @@ program
   .version("0.1.0");
 
 registerInitCommand(program);
+registerTaskCommand(program);
 
 program.parse(process.argv);
