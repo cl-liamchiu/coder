@@ -15,7 +15,7 @@ export const TASK_FETCH_HOOK = `#!/usr/bin/env node
  *     "ticketId"?: string | null,
  *     "title": string,
  *     "body"?: string,
- *     "baseBranch"?: string
+ *     "baseBranch": string
  *   }
  *
  * The array MUST be printed on a single line — use JSON.stringify(tasks),

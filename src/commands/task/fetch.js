@@ -150,11 +150,14 @@ function parseTaskArray(stdout) {
 function syncOneTask(db, task) {
   const title = task?.title;
   const body = task?.body ?? null;
-  const baseBranch = task?.baseBranch ?? null;
+  const baseBranch = task?.baseBranch;
   const ticketId = task?.ticketId ?? null;
 
   if (!title || typeof title !== "string") {
     throw new Error(`任務缺少必要欄位 title：${JSON.stringify(task)}`);
+  }
+  if (!baseBranch || typeof baseBranch !== "string") {
+    throw new Error(`任務缺少必要欄位 baseBranch：${JSON.stringify(task)}`);
   }
 
   // No ticketId means we can't dedupe/correlate against existing rows —

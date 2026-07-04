@@ -60,7 +60,7 @@ function runTaskList() {
         row.ticketId ?? "-",
         row.title,
         colorize(row.status),
-        row.baseBranch ?? "-",
+        row.baseBranch,
       ]);
     }
 
