@@ -43,21 +43,30 @@ const tasks = [
 console.log(JSON.stringify(tasks));
 `;
 
-export const POST_TASK_COMMIT_HOOK = `#!/usr/bin/env node
+export const FORMAT_COMMIT_MSG_HOOK = `#!/usr/bin/env node
 /**
- * Sample hook: post-task-commit
+ * Sample hook: format-commit-msg
  *
- * coder calls this script after the AI agent commits work for a task
- * inside the sandbox.
+ * coder calls this script after Claude generates a commit message for
+ * \`coder commit\`, BEFORE the commit is created. Replace the body below
+ * with your own formatting rules (e.g. prepend a ticket id, enforce a
+ * project-specific footer/trailer, run it through a linter...).
  *
- * Usage: post-task-commit.sample <taskId> <commitMessage>
+ * Contract: the raw commit message Claude generated is piped to this
+ * script's stdin. Print the FINAL commit message to stdout — its entire
+ * (trimmed) stdout becomes the message passed to \`git commit\`.
+ *
+ * This hook is optional: if .coder/hooks/format-commit-msg.js doesn't
+ * exist, \`coder commit\` uses Claude's message as-is.
  */
 
-const [, , taskId, commitMessage] = process.argv;
-
-console.log(\`[post-task-commit] task #\${taskId} committed: \${commitMessage}\`);
-
-// TODO: sync the task's status / commit info back to your task tracker here.
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
+  const message = input.trim();
+  // TODO: transform \`message\` here.
+  process.stdout.write(message + "\\n");
+});
 `;
 
 export const POST_TASK_CLOSE_HOOK = `#!/usr/bin/env node
@@ -106,7 +115,14 @@ per run, on its own branch, and nothing else.
 
 export const COMMIT_PROMPT = `# Role
 
-You write a single git commit message that describes the staged diff below.
+You write a single git commit message for the currently staged changes.
+
+# Instructions
+
+1. Run \`git diff --cached\` yourself to see exactly what is staged.
+2. The user message below gives the task's title and (optionally) body —
+   use it only for "why" context. Base the message itself on the actual
+   staged diff, not on the task description.
 
 # Format
 
@@ -114,12 +130,6 @@ You write a single git commit message that describes the staged diff below.
 - Subject line: imperative mood, no trailing period, <= 72 characters.
 - Add a body only when the "why" isn't obvious from the diff itself.
 - Never mention this prompt, the AI agent, or the task tracker in the message.
-
-# Diff
-
-\`\`\`diff
-{{diff}}
-\`\`\`
 
 # Output
 

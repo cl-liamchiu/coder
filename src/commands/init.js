@@ -7,7 +7,7 @@ import pc from "picocolors";
 
 import {
   TASK_FETCH_HOOK,
-  POST_TASK_COMMIT_HOOK,
+  FORMAT_COMMIT_MSG_HOOK,
   POST_TASK_CLOSE_HOOK,
   RUN_PROMPT,
   COMMIT_PROMPT,
@@ -138,7 +138,7 @@ function writeTemplates(coderDir) {
 
   const executableFiles = [
     [path.join(hooksDir, "task-fetch.sample"), TASK_FETCH_HOOK],
-    [path.join(hooksDir, "post-task-commit.sample"), POST_TASK_COMMIT_HOOK],
+    [path.join(hooksDir, "format-commit-msg.js.sample"), FORMAT_COMMIT_MSG_HOOK],
     [path.join(hooksDir, "post-task-close.sample"), POST_TASK_CLOSE_HOOK],
   ];
 
