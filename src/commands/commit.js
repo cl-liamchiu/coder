@@ -5,6 +5,9 @@ import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
 
+import { runClaudeAgent } from "../claude.js";
+import { resolveTask as resolveTaskRow } from "../tasks.js";
+
 export function registerCommitCommand(program) {
   program
     .command("commit [id]")
@@ -95,27 +98,7 @@ function hasStagedChanges(workDir) {
 function resolveTask(dbPath, id, ticketId) {
   const db = new Database(dbPath, { readonly: true });
   try {
-    if (id) {
-      const idNum = Number(id);
-      if (!Number.isInteger(idNum)) {
-        throw new Error(`無效的任務 id："${id}"`);
-      }
-      const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(idNum);
-      if (!task) {
-        throw new Error(`找不到 id 為 ${idNum} 的任務`);
-      }
-      return task;
-    }
-
-    const rows = db
-      .prepare(
-        "SELECT * FROM tasks WHERE ticketId = ? AND status != 'DONE' ORDER BY id DESC"
-      )
-      .all(ticketId);
-    if (rows.length === 0) {
-      throw new Error(`找不到 ticketId 為 "${ticketId}" 的非 DONE 任務`);
-    }
-    return rows[0];
+    return resolveTaskRow(db, id, ticketId);
   } finally {
     db.close();
   }
@@ -124,45 +107,20 @@ function resolveTask(dbPath, id, ticketId) {
 function generateCommitMessage({ workDir, promptPath, settingsPath, task, sessionId }) {
   const spinner = ora("請 Claude 撰寫 commit message ...").start();
 
-  const args = [
-    "-p",
-    "--append-system-prompt-file",
-    promptPath,
-    "--output-format",
-    "json",
-    "--settings",
-    settingsPath,
-  ];
-  if (sessionId) {
-    args.push("--resume", sessionId);
-  }
-
   const stdinInput = `${task.title}\n${task.body ?? ""}`;
-
-  let stdout;
-  try {
-    stdout = execFileSync("claude", args, {
-      cwd: workDir,
-      input: stdinInput,
-      encoding: "utf8",
-    });
-  } catch (err) {
-    spinner.fail("Claude 執行失敗");
-    throw new Error(`claude 執行失敗：${err.message}`);
-  }
 
   let parsed;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = runClaudeAgent({ cwd: workDir, promptPath, settingsPath, stdinInput, sessionId });
   } catch (err) {
-    spinner.fail("Claude 回應不是合法的 JSON");
-    throw new Error(`claude 輸出不是合法的 JSON：${err.message}`);
+    spinner.fail("Claude 執行失敗");
+    throw err;
   }
 
   const result = parsed?.result;
   if (!result || typeof result !== "string" || result.trim() === "") {
     spinner.fail("Claude 回應缺少 result 欄位");
-    throw new Error(`claude 輸出缺少有效的 result 欄位：${stdout}`);
+    throw new Error(`claude 輸出缺少有效的 result 欄位：${JSON.stringify(parsed)}`);
   }
 
   spinner.succeed("Claude 已產生 commit message");

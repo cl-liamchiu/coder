@@ -13,6 +13,7 @@ import {
   COMMIT_PROMPT,
   CLAUDE_SANDBOX_SETTINGS,
 } from "../templates.js";
+import { upsertSandboxConfig } from "../config.js";
 
 export function registerInitCommand(program) {
   program
@@ -51,6 +52,7 @@ function runInit(remoteName, sandboxPathArg) {
     initDatabase(coderDir);
     sandboxDirCreatedByUs = createSandbox(sandboxPath);
     addRemote(projectRoot, remoteName, sandboxPath);
+    upsertSandboxConfig(coderDir, remoteName, sandboxPath);
 
     console.log();
     console.log(pc.green(`✔ 沙盒 "${remoteName}" 初始化完成`));
