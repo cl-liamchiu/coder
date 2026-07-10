@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+/**
+ * Sample hook: format-commit-msg
+ *
+ * coder calls this script after Claude generates a commit message for
+ * `coder commit`, BEFORE the commit is created. Replace the body below
+ * with your own formatting rules (e.g. prepend a ticket id, enforce a
+ * project-specific footer/trailer, run it through a linter...).
+ *
+ * Contract: the raw commit message Claude generated is piped to this
+ * script's stdin. Print the FINAL commit message to stdout — its entire
+ * (trimmed) stdout becomes the message passed to `git commit`.
+ *
+ * This hook is optional: if .coder/hooks/format-commit-msg.js doesn't
+ * exist, `coder commit` uses Claude's message as-is.
+ */
+
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
+  const message = input.trim();
+  // TODO: transform `message` here.
+  process.stdout.write(message + "\n");
+});

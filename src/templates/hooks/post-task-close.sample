@@ -1,0 +1,14 @@
+#!/usr/bin/env node
+/**
+ * Sample hook: post-task-close
+ *
+ * coder calls this script after a task's status transitions to DONE.
+ *
+ * Usage: post-task-close.sample <taskId>
+ */
+
+const [, , taskId] = process.argv;
+
+console.log(`[post-task-close] task #${taskId} closed`);
+
+// TODO: notify your task tracker / trigger downstream automation here.

@@ -1,19 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
 
-import {
-  TASK_FETCH_HOOK,
-  FORMAT_COMMIT_MSG_HOOK,
-  POST_TASK_CLOSE_HOOK,
-  RUN_PROMPT,
-  COMMIT_PROMPT,
-  CLAUDE_SANDBOX_SETTINGS,
-} from "../templates.js";
 import { upsertSandboxConfig } from "../config.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const templatesDir = path.resolve(path.dirname(__filename), "..", "templates");
 
 export function registerInitCommand(program) {
   program
@@ -139,24 +135,24 @@ function writeTemplates(coderDir) {
   const promptsDir = path.join(coderDir, "prompts");
 
   const executableFiles = [
-    [path.join(hooksDir, "task-fetch.sample"), TASK_FETCH_HOOK],
-    [path.join(hooksDir, "format-commit-msg.js.sample"), FORMAT_COMMIT_MSG_HOOK],
-    [path.join(hooksDir, "post-task-close.sample"), POST_TASK_CLOSE_HOOK],
+    ["hooks/task-fetch.sample", path.join(hooksDir, "task-fetch.sample")],
+    ["hooks/format-commit-msg.js.sample", path.join(hooksDir, "format-commit-msg.js.sample")],
+    ["hooks/post-task-close.sample", path.join(hooksDir, "post-task-close.sample")],
   ];
 
-  for (const [filePath, content] of executableFiles) {
-    writeIfMissing(filePath, content);
+  for (const [srcRel, destPath] of executableFiles) {
+    copyIfMissing(path.join(templatesDir, srcRel), destPath);
     if (process.platform !== "win32") {
-      fs.chmodSync(filePath, 0o755);
+      fs.chmodSync(destPath, 0o755);
     }
   }
 
-  writeIfMissing(path.join(promptsDir, "run.md"), RUN_PROMPT);
-  writeIfMissing(path.join(promptsDir, "commit.md"), COMMIT_PROMPT);
+  copyIfMissing(path.join(templatesDir, "prompts/run.md"), path.join(promptsDir, "run.md"));
+  copyIfMissing(path.join(templatesDir, "prompts/commit.md"), path.join(promptsDir, "commit.md"));
 
-  writeIfMissing(
-    path.join(coderDir, "claude-sandbox-settings.json"),
-    JSON.stringify(CLAUDE_SANDBOX_SETTINGS, null, 2) + "\n"
+  copyIfMissing(
+    path.join(templatesDir, "claude-sandbox-settings.json"),
+    path.join(coderDir, "claude-sandbox-settings.json")
   );
 
   spinner.succeed("寫入 hooks / prompts / claude-sandbox-settings.json 完成");
@@ -164,9 +160,9 @@ function writeTemplates(coderDir) {
 
 // Never clobber a file the user may have customized after a previous
 // `coder init` run — only create it the first time it's missing.
-function writeIfMissing(filePath, content) {
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, content);
+function copyIfMissing(srcPath, destPath) {
+  if (!fs.existsSync(destPath)) {
+    fs.copyFileSync(srcPath, destPath);
   }
 }
 
