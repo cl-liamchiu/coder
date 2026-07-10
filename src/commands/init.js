@@ -49,6 +49,7 @@ function runInit(remoteName, sandboxPathArg) {
     sandboxDirCreatedByUs = createSandbox(sandboxPath);
     addRemote(projectRoot, remoteName, sandboxPath);
     upsertSandboxConfig(coderDir, remoteName, sandboxPath);
+    checkGitAuthor(sandboxPath);
 
     console.log();
     console.log(pc.green(`✔ 沙盒 "${remoteName}" 初始化完成`));
@@ -224,6 +225,50 @@ function createSandbox(sandboxPath) {
 
   spinner.succeed("沙盒目錄已建立並設定 receive.denyCurrentBranch=updateInstead");
   return createdByUs;
+}
+
+// Advisory only — never throws. `coder run` commits inside sandboxPath, and
+// a sandbox with no resolvable user.name/user.email (no local config, no
+// inherited global config) makes `git commit` fail there. We can't safely
+// pick an identity on the user's behalf, so just surface what will happen.
+function checkGitAuthor(sandboxPath) {
+  const spinner = ora("檢查沙盒 git 作者設定 ...").start();
+
+  const name = readGitConfig(sandboxPath, "user.name");
+  const email = readGitConfig(sandboxPath, "user.email");
+
+  if (!name || !email) {
+    spinner.warn("沙盒尚未設定 git 作者資訊");
+    console.log(
+      pc.yellow(
+        "  ⚠ 沒有偵測到 user.name / user.email（沙盒本身沒設定，也沒有從全域繼承到），coder run 在沙盒內 commit 時會失敗"
+      )
+    );
+    console.log(
+      pc.dim(`    請自行設定，例如只套用在這個沙盒：`)
+    );
+    console.log(
+      pc.dim(`      git -C "${sandboxPath}" config user.name "<name>"`)
+    );
+    console.log(
+      pc.dim(`      git -C "${sandboxPath}" config user.email "<email>"`)
+    );
+    console.log(pc.dim("    或設定全域帳號：git config --global user.name/user.email"));
+    return;
+  }
+
+  spinner.succeed(`沙盒將以 ${name} <${email}> 身分 commit`);
+  console.log(
+    pc.dim("  若要更換身分，請自行調整沙盒（或全域）的 git user.name / user.email")
+  );
+}
+
+function readGitConfig(cwd, key) {
+  try {
+    return execFileSync("git", ["config", key], { cwd, encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
 }
 
 function addRemote(projectRoot, remoteName, sandboxPath) {
