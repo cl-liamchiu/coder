@@ -11,8 +11,8 @@ const STATUS_COLORS = {
   DONE: pc.green,
 };
 
-export function registerViewCommand(task) {
-  task
+export function registerViewCommand(program) {
+  program
     .command("view [id]")
     .description("View a task's full details, by id or by ticketId")
     .option("-t, --ticketId <ticketId>", "依 ticketId 精準查詢（可能對應多筆任務）")

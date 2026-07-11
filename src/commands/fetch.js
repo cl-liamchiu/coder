@@ -5,8 +5,8 @@ import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
 
-export function registerFetchCommand(task) {
-  task
+export function registerFetchCommand(program) {
+  program
     .command("fetch")
     .description(
       "Run .coder/hooks/task-fetch and sync the returned tasks into .coder/tasks.db"

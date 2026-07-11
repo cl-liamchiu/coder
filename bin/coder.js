@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { registerInitCommand } from "../src/commands/init.js";
-import { registerTaskCommand } from "../src/commands/task/index.js";
+import { registerFetchCommand } from "../src/commands/fetch.js";
+import { registerListCommand } from "../src/commands/list.js";
+import { registerViewCommand } from "../src/commands/view.js";
 import { registerCommitCommand } from "../src/commands/commit.js";
 import { registerRunCommand } from "../src/commands/run.js";
 import { registerReviewCommand } from "../src/commands/review.js";
@@ -15,7 +17,9 @@ program
   .version("0.1.0");
 
 registerInitCommand(program);
-registerTaskCommand(program);
+registerFetchCommand(program);
+registerListCommand(program);
+registerViewCommand(program);
 registerCommitCommand(program);
 registerRunCommand(program);
 registerReviewCommand(program);

@@ -14,8 +14,8 @@ const STATUS_COLORS = {
   DONE: pc.green,
 };
 
-export function registerListCommand(task) {
-  task
+export function registerListCommand(program) {
+  program
     .command("list")
     .description("List tasks stored in .coder/tasks.db (active tasks only by default)")
     .option("-a, --all", "顯示全部任務，包含 DONE")
