@@ -59,12 +59,12 @@ coder run
 ## 任務狀態機
 
 ```
-TODO ──(coder run 開始)──▶ IN_PROGRESS ──(成功)──▶ IN_REVIEW
+TODO ──(coder run 開始)──▶ IN_PROGRESS ──(成功)──▶ IN_REVIEW ──(coder close)──▶ DONE
   ▲                              │
   └──────────(失敗，自動回滾)─────┘
 ```
 
-`DONE`、`REJECTED` 是保留狀態（`coder task list`/`view` 已支援篩選），但目前沒有任何指令會寫入這兩個狀態——要視為人工 review 後的最終結果，或留給未來的 `coder task close` 之類指令。`task-fetch` 同步邏輯會用 `DONE` 判斷「這個 ticketId 是否可以重新開一筆新任務」。
+`REJECTED` 是保留狀態（`coder task list`/`view` 已支援篩選），但目前沒有任何指令會寫入它——留給人工 review 後「這個任務不要合併」的最終結果之類用途。`task-fetch` 同步邏輯會用 `DONE` 判斷「這個 ticketId 是否可以重新開一筆新任務」。
 
 ## 指令參考
 
@@ -142,6 +142,43 @@ coder run 1 -t TICK-2              # id 跟 ticketId 可混用，重複解析到
 
 沒有 ticketId 的任務，分支名裡會用 `local` 代替。
 
+### `coder review [id]`
+
+```
+coder review <id>
+coder review -t <ticketId>
+```
+
+把 `coder run` 在沙盒裡完成的任務分支拉回主專案，方便你用熟悉的工具（`git diff`、VSCode 等）review：
+
+1. 依 `id` 或 `ticketId`（取最新一筆非 `DONE` 的紀錄）找出對應任務，算出跟 `coder run` 相同規則的分支名稱 `coder/<baseBranch>/task-<id>-<safeTicketId>`
+2. 在主專案執行 `git fetch <sandbox> <該分支>`
+3. `git checkout -B <該分支> FETCH_HEAD`，把主專案的工作目錄切到這個分支（重複執行會直接覆蓋成沙盒最新的內容）
+4. 印出該分支最新一筆 commit 的 hash 與完整 commit message
+
+如果分支在沙盒裡還不存在（例如這個任務還沒 `coder run` 過），`git fetch` 會失敗並提示可能是這個原因。
+
+### `coder close [id]`
+
+```
+coder close <id>
+coder close -t <ticketId>
+coder close              # 沒指定 → 用目前所在的 coder/ 任務分支反推是哪個任務
+```
+
+預期先用 `coder review` 把任務分支拉到主專案看過、覺得可以合併了，再用這個指令正式收尾（`coder close` 本身不會去 sandbox 拉分支，只認主專案裡已經存在的本地分支）：
+
+1. 找出要關閉的任務：給了 `id` 或 `ticketId` 就用它查；都沒給的話，檢查目前所在的本地分支，如果是 `coder/<baseBranch>/task-<id>-<ticketId>` 這種任務分支，就從分支名稱反推出任務 id（並確認解析出的 baseBranch 跟資料庫紀錄一致，否則報錯）；如果目前分支不是任務分支，就報錯並提示改用 `<id>` 或 `-t`
+2. 算出分支名稱、確認任務的 `baseBranch` 在主專案裡存在，以及該任務分支也已經存在於主專案（兩者缺一都直接報錯、不做任何變更；後者會提示先執行 `coder review`）
+3. 切換到該分支，`git rebase <baseBranch>` 把它墊到最新的 `baseBranch` 上
+4. 切換到 `baseBranch`，`git merge --ff-only` 合併進去（線性歷史，不會產生 merge commit）
+5. 合併成功後：任務狀態改成 `DONE`（並寫入 `closedAt`），接著刪除該分支——主專案跟 sandbox 都刪
+6. 如果 `.coder/hooks/post-task-close`（或 `.js`）存在，用任務 id 當參數執行它
+
+如果 rebase 途中發生衝突，`coder close` 會自動 `git rebase --abort` 並切回你執行指令前所在的分支，任務狀態維持不變（不會變成 `DONE`，也不會變回其他狀態）；已經從 sandbox 拉下來的本地分支會保留著，方便你自行排解衝突後重新處理。
+
+合併一旦成功（fast-forward 進 `baseBranch`），任務就會標記為 `DONE`；之後的分支清理、`post-task-close` hook 執行都是 best-effort——就算失敗也只會印出警告，不會讓指令回報失敗或把任務狀態改回去。
+
 ## Hooks
 
 放在 `.coder/hooks/`，`coder init` 會附上範本（`*.sample`），需要自行重新命名/客製化。
@@ -150,7 +187,7 @@ coder run 1 -t TICK-2              # id 跟 ticketId 可混用，重複解析到
 |---|---|---|---|
 | `task-fetch` / `task-fetch.js` | `coder task fetch` | 必要（沒有就會失敗） | 無輸入；最後一行 stdout 必須是 JSON 陣列 `[{ticketId?, title, body?, baseBranch}]` |
 | `format-commit-msg.js` | `coder commit`，Claude 產生訊息之後、實際 commit 之前 | 選用；存在但失敗會中止 commit | stdin = Claude 產生的原始訊息；stdout（trim 後）= 最終 commit message |
-| `post-task-close` | 任務狀態轉為 `DONE` 之後 | 選用；**目前沒有任何指令會觸發它**，是為未來的任務關閉流程預留 | argv：`<taskId>` |
+| `post-task-close` / `post-task-close.js` | `coder close`，任務合併進 `baseBranch` 並轉為 `DONE` 之後 | 選用；失敗只會印出警告，不影響 `coder close` 的結果 | argv：`<taskId>` |
 
 `task-fetch` 在 Windows 上只支援 `.js`（無 shebang 支援）；其他平台可用無副檔名的可執行檔或 `.js`。
 

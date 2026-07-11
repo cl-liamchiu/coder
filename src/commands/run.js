@@ -9,6 +9,7 @@ import pc from "picocolors";
 import { runClaudeAgent } from "../claude.js";
 import { resolveTask, listTodoTasks } from "../tasks.js";
 import { resolveSandbox } from "../config.js";
+import { taskBranchName } from "../branch.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const coderBin = path.resolve(path.dirname(__filename), "..", "..", "bin", "coder.js");
@@ -110,12 +111,7 @@ function runSingleTask({ task, projectRoot, dbPath, promptPath, settingsPath, sa
 
     pushBaseBranch(projectRoot, sandbox.name, task.baseBranch);
 
-    const safeTicketId = sanitizeTicketId(task.ticketId);
-    // "coder/<baseBranch>/..." keeps every task branch in its own namespace
-    // subtree, so it never collides with the baseBranch ref itself (unlike
-    // "<baseBranch>/task-..." — git can't have refs/heads/main *and*
-    // refs/heads/main/task-1 coexist).
-    branchName = `coder/${task.baseBranch}/task-${task.id}-${safeTicketId}`;
+    branchName = taskBranchName(task);
     createTaskBranch(sandbox.path, branchName, task.baseBranch);
 
     const sessionId = runClaudeOnTask({ sandboxPath: sandbox.path, promptPath, settingsPath, task });
@@ -148,15 +144,6 @@ function pushBaseBranch(projectRoot, sandboxName, baseBranch) {
     throw new Error(`git push ${sandboxName} ${baseBranch} 失敗：${err.message}`);
   }
   spinner.succeed(`已推送 ${baseBranch} 到 sandbox "${sandboxName}"`);
-}
-
-// Strips characters git branch names can't contain (spaces, #, :, ~, ^, ?,
-// *, [, \, ..) down to a safe slug; ticketId is nullable, so an empty
-// result (or no ticketId at all) falls back to "local".
-function sanitizeTicketId(ticketId) {
-  if (!ticketId) return "local";
-  const cleaned = ticketId.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-  return cleaned || "local";
 }
 
 function createTaskBranch(sandboxPath, branchName, baseBranch) {
