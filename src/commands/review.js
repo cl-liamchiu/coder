@@ -109,4 +109,20 @@ function printLastCommit(projectRoot, branchName) {
   console.log(pc.bold("Commit:"), hash);
   console.log();
   console.log(message);
+  console.log();
+  printChangedFiles(projectRoot, branchName);
+}
+
+// Name-only, on purpose — this is just so the reviewer notices anything
+// that shouldn't be here (a stray .env, a debug script) before `coder
+// close`. Full content is a `git diff` away if they want it.
+function printChangedFiles(projectRoot, branchName) {
+  const files = execFileSync(
+    "git",
+    ["show", "--name-only", "--pretty=format:", branchName],
+    { cwd: projectRoot, encoding: "utf8" }
+  ).trim();
+
+  console.log(pc.bold("Changed files:"));
+  console.log(files);
 }
