@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
 
-import { resolveTask } from "../tasks.js";
+import { resolveTask, validateTaskSelector, updateTaskById } from "../tasks.js";
 import { resolveSandbox } from "../config.js";
 import { taskBranchName, parseTaskBranchName } from "../branch.js";
 import { resolveHook, execHook } from "../hooks.js";
@@ -28,9 +28,7 @@ function runClose(id, options) {
   const dbPath = path.join(coderDir, "tasks.db");
 
   try {
-    if (id && options.ticketId) {
-      throw new Error("請只使用 <id> 或 -t/--ticketId 其中一種查詢方式，不能同時使用");
-    }
+    validateTaskSelector(id, options.ticketId, { requireOne: false });
     if (!fs.existsSync(dbPath)) {
       throw new Error(`${dbPath} 不存在，請先執行 \`coder init\``);
     }
@@ -105,10 +103,7 @@ function detectTaskFromCurrentBranch(projectRoot, dbPath) {
 function markTaskDone(dbPath, id) {
   const db = new Database(dbPath);
   try {
-    db.prepare(
-      "UPDATE tasks SET status = 'DONE', closedAt = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(id);
-    return db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+    return updateTaskById(db, id, "status = 'DONE', closedAt = CURRENT_TIMESTAMP");
   } finally {
     db.close();
   }

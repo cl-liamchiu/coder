@@ -20,6 +20,21 @@ export const VALID_STATUSES = [
 // reachable exclusively through `coder close`.
 export const MANUALLY_SETTABLE_STATUSES = VALID_STATUSES.filter((s) => s !== "DONE");
 
+// Shared by `coder edit` (validating --status) and `coder fetch` (validating
+// a source-provided status) so the two don't drift into differently-worded
+// error messages for the same underlying rule. context, if given, is
+// appended as-is (e.g. fetch.js passes the offending task's JSON).
+export function assertManuallySettableStatus(status, context) {
+  if (MANUALLY_SETTABLE_STATUSES.includes(status)) {
+    return;
+  }
+  const doneHint = status === "DONE" ? "（DONE 只能透過 coder close 設定）" : "";
+  const suffix = context !== undefined ? `：${context}` : "";
+  throw new Error(
+    `無效的狀態 "${status}"，可用值：${MANUALLY_SETTABLE_STATUSES.join(", ")}${doneHint}${suffix}`
+  );
+}
+
 export const STATUS_COLORS = {
   TODO: pc.cyan,
   IN_PROGRESS: pc.yellow,

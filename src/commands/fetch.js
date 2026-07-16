@@ -5,7 +5,7 @@ import ora from "ora";
 import pc from "picocolors";
 
 import { resolveHook, execHook } from "../hooks.js";
-import { MANUALLY_SETTABLE_STATUSES } from "../statuses.js";
+import { assertManuallySettableStatus } from "../statuses.js";
 
 export function registerFetchCommand(program) {
   program
@@ -122,13 +122,7 @@ function syncOneTask(db, task) {
   // post-close hook, branch cleanup) that only `coder close` performs. A
   // task-fetch source claiming a task is DONE would otherwise mark it done
   // without any of that ever happening.
-  if (!MANUALLY_SETTABLE_STATUSES.includes(status)) {
-    throw new Error(
-      `任務的 status 不合法："${status}"，可用值：${MANUALLY_SETTABLE_STATUSES.join(", ")}` +
-        (status === "DONE" ? "（DONE 只能透過 coder close 設定，不能由 task-fetch 指定）" : "") +
-        `：${JSON.stringify(task)}`
-    );
-  }
+  assertManuallySettableStatus(status, JSON.stringify(task));
 
   // No ticketId means we can't dedupe/correlate against existing rows —
   // always insert as a new task.

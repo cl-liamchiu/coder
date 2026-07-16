@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
 
-import { resolveTask } from "../tasks.js";
+import { resolveTask, validateTaskSelector } from "../tasks.js";
 import { resolveSandbox } from "../config.js";
 import { taskBranchName } from "../branch.js";
 
@@ -27,12 +27,7 @@ function runReview(id, options) {
   const dbPath = path.join(coderDir, "tasks.db");
 
   try {
-    if (id && options.ticketId) {
-      throw new Error("請只使用 <id> 或 -t/--ticketId 其中一種查詢方式，不能同時使用");
-    }
-    if (!id && !options.ticketId) {
-      throw new Error("請提供任務 <id> 或使用 -t/--ticketId 指定 ticketId");
-    }
+    validateTaskSelector(id, options.ticketId);
     if (!fs.existsSync(dbPath)) {
       throw new Error(`${dbPath} 不存在，請先執行 \`coder init\``);
     }

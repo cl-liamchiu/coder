@@ -6,7 +6,7 @@ import ora from "ora";
 import pc from "picocolors";
 
 import { runClaudeAgent } from "../claude.js";
-import { resolveTask as resolveTaskRow } from "../tasks.js";
+import { resolveTask as resolveTaskRow, validateTaskSelector } from "../tasks.js";
 import { resolveHook, execHook } from "../hooks.js";
 
 export function registerCommitCommand(program) {
@@ -42,12 +42,7 @@ function runCommit(id, options) {
   const settingsPath = path.join(coderDir, "claude-sandbox-settings.json");
 
   try {
-    if (id && options.ticketId) {
-      throw new Error("請只使用 <id> 或 -t/--ticketId 其中一種查詢方式，不能同時使用");
-    }
-    if (!id && !options.ticketId) {
-      throw new Error("請提供任務 <id> 或使用 -t/--ticketId 指定 ticketId");
-    }
+    validateTaskSelector(id, options.ticketId);
 
     if (!hasStagedChanges(workDir)) {
       console.log(pc.yellow("⚠ 暫存區 (staged) 沒有任何檔案，沒有東西可以 commit"));

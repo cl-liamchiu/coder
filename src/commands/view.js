@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import pc from "picocolors";
 
 import { STATUS_COLORS } from "../statuses.js";
+import { validateTaskSelector } from "../tasks.js";
 
 export function registerViewCommand(program) {
   program
@@ -23,12 +24,7 @@ function runTaskView(id, options) {
     if (!fs.existsSync(dbPath)) {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
     }
-    if (id && options.ticketId) {
-      throw new Error("請只使用 <id> 或 -t/--ticketId 其中一種查詢方式，不能同時使用");
-    }
-    if (!id && !options.ticketId) {
-      throw new Error("請提供任務 <id> 或使用 -t/--ticketId 指定 ticketId");
-    }
+    validateTaskSelector(id, options.ticketId);
 
     const db = new Database(dbPath, { readonly: true });
     let rows;
