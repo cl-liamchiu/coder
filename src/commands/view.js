@@ -4,19 +4,20 @@ import Database from "better-sqlite3";
 import pc from "picocolors";
 
 import { STATUS_COLORS } from "../statuses.js";
-import { validateTaskSelector } from "../tasks.js";
+import { validateTaskSelector, parseTaskIdentifier } from "../tasks.js";
 
 export function registerViewCommand(program) {
   program
     .command("view [id]")
-    .description("View a task's full details, by id or by ticketId")
-    .option("-t, --ticketId <ticketId>", "依 ticketId 精準查詢（可能對應多筆任務）")
-    .action((id, options) => {
-      runTaskView(id, options);
+    .description(
+      "View a task's full details, by id (exact match) or by ticketId (all matching rows)"
+    )
+    .action((id) => {
+      runTaskView(id);
     });
 }
 
-function runTaskView(id, options) {
+function runTaskView(id) {
   const projectRoot = process.cwd();
   const dbPath = path.join(projectRoot, ".coder", "tasks.db");
 
@@ -24,26 +25,24 @@ function runTaskView(id, options) {
     if (!fs.existsSync(dbPath)) {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
     }
-    validateTaskSelector(id, options.ticketId);
+    validateTaskSelector(id);
+
+    const parsed = parseTaskIdentifier(id);
 
     const db = new Database(dbPath, { readonly: true });
     let rows;
     try {
-      if (id) {
-        const idNum = Number(id);
-        if (!Number.isInteger(idNum)) {
-          throw new Error(`無效的任務 id："${id}"`);
-        }
-        rows = db.prepare("SELECT * FROM tasks WHERE id = ?").all(idNum);
+      if (parsed.type === "id") {
+        rows = db.prepare("SELECT * FROM tasks WHERE id = ?").all(parsed.id);
         if (rows.length === 0) {
-          throw new Error(`找不到 id 為 ${idNum} 的任務`);
+          throw new Error(`找不到 id 為 ${parsed.id} 的任務`);
         }
       } else {
         rows = db
           .prepare("SELECT * FROM tasks WHERE ticketId = ? ORDER BY id ASC")
-          .all(options.ticketId);
+          .all(parsed.ticketId);
         if (rows.length === 0) {
-          throw new Error(`找不到 ticketId 為 "${options.ticketId}" 的任務`);
+          throw new Error(`找不到 ticketId 為 "${parsed.ticketId}" 的任務`);
         }
       }
     } finally {

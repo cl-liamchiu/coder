@@ -14,28 +14,18 @@ import { taskBranchName } from "../branch.js";
 const __filename = fileURLToPath(import.meta.url);
 const coderBin = path.resolve(path.dirname(__filename), "..", "..", "bin", "coder.js");
 
-function collect(value, previous) {
-  return previous.concat([value]);
-}
-
 export function registerRunCommand(program) {
   program
     .command("run [ids...]")
     .description(
-      "Let Claude autonomously work on tasks inside the sandbox, then commit the result. With no id/-t, runs every TODO task."
+      "Let Claude autonomously work on tasks inside the sandbox, then commit the result. With no ids, runs every TODO task."
     )
-    .option(
-      "-t, --ticketId <ticketId>",
-      "依 ticketId 查詢任務（可重複使用指定多個，取各自最新一筆非 DONE 的任務）",
-      collect,
-      []
-    )
-    .action((ids, options) => {
-      runRun(ids, options);
+    .action((ids) => {
+      runRun(ids);
     });
 }
 
-function runRun(ids, options) {
+function runRun(ids) {
   const projectRoot = process.cwd();
   const coderDir = path.join(projectRoot, ".coder");
   const dbPath = path.join(coderDir, "tasks.db");
@@ -57,7 +47,7 @@ function runRun(ids, options) {
     // resolveSandbox() just auto-selects the sole configured entry.
     const sandbox = resolveSandbox(coderDir);
 
-    const tasks = pickTasks(dbPath, ids, options.ticketId);
+    const tasks = pickTasks(dbPath, ids);
     if (tasks.length === 0) {
       console.log(pc.yellow("⚠ 沒有狀態為 TODO 的任務"));
       return;
@@ -78,23 +68,20 @@ function runRun(ids, options) {
   }
 }
 
-// ids/ticketIds can each be repeated, and can overlap with each other (the
-// same underlying task reached via its id in one place and its ticketId in
-// another) — dedupe by resolved task.id, keyed in first-seen order.
-function pickTasks(dbPath, ids, ticketIds) {
+// Each item in ids can be either a task id or a ticketId (auto-detected by
+// resolveTask), and the same underlying task can be reached more than once
+// (e.g. its id in one place, its ticketId in another) — dedupe by resolved
+// task.id, keyed in first-seen order.
+function pickTasks(dbPath, ids) {
   const db = new Database(dbPath);
   try {
-    if (ids.length === 0 && ticketIds.length === 0) {
+    if (ids.length === 0) {
       return listTodoTasks(db);
     }
 
     const tasksById = new Map();
     for (const id of ids) {
-      const task = resolveTask(db, id, null);
-      tasksById.set(task.id, task);
-    }
-    for (const ticketId of ticketIds) {
-      const task = resolveTask(db, null, ticketId);
+      const task = resolveTask(db, id);
       tasksById.set(task.id, task);
     }
     return [...tasksById.values()];

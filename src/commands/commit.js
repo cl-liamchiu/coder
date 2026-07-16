@@ -15,7 +15,6 @@ export function registerCommitCommand(program) {
     .description(
       "Ask Claude to write a commit message for the staged changes and commit them"
     )
-    .option("-t, --ticketId <ticketId>", "依 ticketId 查詢任務（取最新一筆非 DONE 的任務）")
     .option("--sessionId <sessionId>", "續用指定的 claude session（--resume）")
     .action((id, options) => {
       runCommit(id, options);
@@ -42,7 +41,7 @@ function runCommit(id, options) {
   const settingsPath = path.join(coderDir, "claude-sandbox-settings.json");
 
   try {
-    validateTaskSelector(id, options.ticketId);
+    validateTaskSelector(id);
 
     if (!hasStagedChanges(workDir)) {
       console.log(pc.yellow("⚠ 暫存區 (staged) 沒有任何檔案，沒有東西可以 commit"));
@@ -59,7 +58,7 @@ function runCommit(id, options) {
       throw new Error(`${settingsPath} 不存在，請先執行 \`coder init\``);
     }
 
-    const task = resolveTask(dbPath, id, options.ticketId);
+    const task = resolveTask(dbPath, id);
 
     let commitMessage = generateCommitMessage({
       workDir,
@@ -91,10 +90,10 @@ function hasStagedChanges(workDir) {
   return stdout.trim() !== "";
 }
 
-function resolveTask(dbPath, id, ticketId) {
+function resolveTask(dbPath, id) {
   const db = new Database(dbPath, { readonly: true });
   try {
-    return resolveTaskRow(db, id, ticketId);
+    return resolveTaskRow(db, id);
   } finally {
     db.close();
   }

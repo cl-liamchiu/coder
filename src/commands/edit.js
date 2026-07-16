@@ -13,7 +13,6 @@ export function registerEditCommand(program) {
     .description(
       "Edit a task's fields directly in .coder/tasks.db (title/body/status/baseBranch)"
     )
-    .option("-t, --ticketId <ticketId>", "依 ticketId 查詢任務（取最新一筆非 DONE 的任務）")
     .option("--title <title>", "更新標題")
     .option("--body <body>", "更新內容")
     .option(
@@ -31,7 +30,7 @@ function runEdit(id, options) {
   const dbPath = path.join(projectRoot, ".coder", "tasks.db");
 
   try {
-    validateTaskSelector(id, options.ticketId);
+    validateTaskSelector(id);
     if (!fs.existsSync(dbPath)) {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
     }
@@ -53,7 +52,7 @@ function runEdit(id, options) {
     const db = new Database(dbPath);
     let updated;
     try {
-      const task = resolveTask(db, id, options.ticketId);
+      const task = resolveTask(db, id);
       updated = updateTaskById(db, task.id, fields.join(", "), params);
     } finally {
       db.close();

@@ -14,29 +14,27 @@ export function registerCloseCommand(program) {
   program
     .command("close [id]")
     .description(
-      "Rebase a reviewed task's branch onto its baseBranch, fast-forward merge it in, mark the task DONE, and delete the branch everywhere. With no id/-t, uses the currently checked-out coder/ task branch."
+      "Rebase a reviewed task's branch onto its baseBranch, fast-forward merge it in, mark the task DONE, and delete the branch everywhere. With no id/ticketId, uses the currently checked-out coder/ task branch."
     )
-    .option("-t, --ticketId <ticketId>", "依 ticketId 查詢任務（取最新一筆非 DONE 的任務）")
-    .action((id, options) => {
-      runClose(id, options);
+    .action((id) => {
+      runClose(id);
     });
 }
 
-function runClose(id, options) {
+function runClose(id) {
   const projectRoot = process.cwd();
   const coderDir = path.join(projectRoot, ".coder");
   const dbPath = path.join(coderDir, "tasks.db");
 
   try {
-    validateTaskSelector(id, options.ticketId, { requireOne: false });
+    validateTaskSelector(id, { requireOne: false });
     if (!fs.existsSync(dbPath)) {
       throw new Error(`${dbPath} 不存在，請先執行 \`coder init\``);
     }
 
-    const task =
-      id || options.ticketId
-        ? resolveTaskFromDb(dbPath, id, options.ticketId)
-        : detectTaskFromCurrentBranch(projectRoot, dbPath);
+    const task = id
+      ? resolveTaskFromDb(dbPath, id)
+      : detectTaskFromCurrentBranch(projectRoot, dbPath);
     const sandbox = resolveSandbox(coderDir);
     const branchName = taskBranchName(task);
     const baseBranch = task.baseBranch;
@@ -70,10 +68,10 @@ function runClose(id, options) {
   }
 }
 
-function resolveTaskFromDb(dbPath, id, ticketId) {
+function resolveTaskFromDb(dbPath, id) {
   const db = new Database(dbPath, { readonly: true });
   try {
-    return resolveTask(db, id, ticketId);
+    return resolveTask(db, id);
   } finally {
     db.close();
   }
@@ -87,11 +85,11 @@ function detectTaskFromCurrentBranch(projectRoot, dbPath) {
   const parsed = parseTaskBranchName(currentBranch);
   if (!parsed) {
     throw new Error(
-      `目前分支 "${currentBranch}" 不是 coder 任務分支（coder/<baseBranch>/task-<id>-<ticketId>），請提供 <id> 或使用 -t/--ticketId 指定要關閉的任務`
+      `目前分支 "${currentBranch}" 不是 coder 任務分支（coder/<baseBranch>/task-<id>-<ticketId>），請提供 <id> 或 <ticketId> 指定要關閉的任務`
     );
   }
 
-  const task = resolveTaskFromDb(dbPath, String(parsed.id), null);
+  const task = resolveTaskFromDb(dbPath, String(parsed.id));
   if (task.baseBranch !== parsed.baseBranch) {
     throw new Error(
       `目前分支解析出的 baseBranch "${parsed.baseBranch}" 與任務 #${task.id} 紀錄的 baseBranch "${task.baseBranch}" 不一致，請改用 \`coder close <id>\` 明確指定`

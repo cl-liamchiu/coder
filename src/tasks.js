@@ -1,15 +1,26 @@
 // Shared task-lookup/update helpers used across the `coder` subcommands.
 
-// Every subcommand that accepts both <id> and -t/--ticketId needs the same
-// "pick exactly one" (or, for `coder close`, "at most one") validation
-// before touching the db. requireOne is false for `coder close`, which can
-// fall back to inferring the task from the currently checked-out branch.
-export function validateTaskSelector(id, ticketId, { requireOne = true } = {}) {
-  if (id && ticketId) {
-    throw new Error("請只使用 <id> 或 -t/--ticketId 其中一種查詢方式，不能同時使用");
+// Every subcommand takes a single <id-or-ticketId> selector rather than
+// separate <id> and -t/--ticketId arguments: coder's own ids are always
+// positive auto-incrementing integers, so a purely-numeric argument is
+// treated as an id and anything else (e.g. "TICK-123") as a ticketId. See
+// resolveTask() for how each type is actually looked up.
+export function parseTaskIdentifier(arg) {
+  if (!arg) {
+    return null;
   }
-  if (requireOne && !id && !ticketId) {
-    throw new Error("請提供任務 <id> 或使用 -t/--ticketId 指定 ticketId");
+  return /^\d+$/.test(arg.trim())
+    ? { type: "id", id: Number(arg) }
+    : { type: "ticketId", ticketId: arg };
+}
+
+// Every subcommand that accepts a single <id-or-ticketId> selector needs the
+// same "must be given" validation before touching the db. requireOne is
+// false for `coder close`, which can fall back to inferring the task from
+// the currently checked-out branch.
+export function validateTaskSelector(arg, { requireOne = true } = {}) {
+  if (requireOne && !arg) {
+    throw new Error("請提供任務 <id> 或 <ticketId>");
   }
 }
 
@@ -20,24 +31,29 @@ export function updateTaskById(db, id, setClause, params = []) {
   return db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
 }
 
-export function resolveTask(db, id, ticketId) {
-  if (id) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum)) {
-      throw new Error(`無效的任務 id："${id}"`);
-    }
-    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(idNum);
+// Resolves a single <id-or-ticketId> selector to exactly one task row. An id
+// match is exact and can be any status (including DONE); a ticketId match
+// takes the latest non-DONE record, since a ticketId can have multiple rows
+// across its history (see task-fetch's re-open-on-DONE behavior in fetch.js).
+export function resolveTask(db, arg) {
+  const parsed = parseTaskIdentifier(arg);
+  if (!parsed) {
+    throw new Error("請提供任務 <id> 或 <ticketId>");
+  }
+
+  if (parsed.type === "id") {
+    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(parsed.id);
     if (!task) {
-      throw new Error(`找不到 id 為 ${idNum} 的任務`);
+      throw new Error(`找不到 id 為 ${parsed.id} 的任務`);
     }
     return task;
   }
 
   const rows = db
     .prepare("SELECT * FROM tasks WHERE ticketId = ? AND status != 'DONE' ORDER BY id DESC")
-    .all(ticketId);
+    .all(parsed.ticketId);
   if (rows.length === 0) {
-    throw new Error(`找不到 ticketId 為 "${ticketId}" 的非 DONE 任務`);
+    throw new Error(`找不到 ticketId 為 "${parsed.ticketId}" 的非 DONE 任務`);
   }
   return rows[0];
 }

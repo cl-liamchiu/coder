@@ -68,6 +68,12 @@ TODO ──(coder run 開始)──▶ IN_PROGRESS ──(成功)──▶ IN_RE
 
 ## 指令參考
 
+### 任務選取規則：`<id>` 還是 `<ticketId>`？
+
+`coder view`、`coder edit`、`coder commit`、`coder run`、`coder review`、`coder close` 都用同一個位置參數指定要操作哪個任務，不再有獨立的 `-t/--ticketId` 選項：純數字（例如 `5`）視為 `id`，其他任何字串（例如 `TICK-123`）視為 `ticketId`。兩者只看格式，不會互相 fallback——如果你的 `ticketId` 剛好是純數字，請改用它對應的 `id` 查詢。
+
+用 `ticketId` 查詢時，除了 `coder view`（會列出該 ticketId 底下所有紀錄、不限狀態），其他指令都是取最新一筆非 `DONE` 的紀錄。
+
 ### `coder init <name> <path>`
 
 在目前目錄（必須已經是 git repo）建立 `.coder/`，並在 `<path>` 建立一個新的沙盒 repo，綁定成 git remote `<name>`。
@@ -97,16 +103,16 @@ coder list [-a|--all] [-s|--status <status>] [-t|--ticketId <id>] [-q|--query <k
 
 ```
 coder view <id>
-coder view -t <ticketId>
+coder view <ticketId>
 ```
 
-顯示單一任務的完整內容（title/body/建立時間等）。用 `-t` 查詢時，同一個 ticketId 若有多筆紀錄會全部列出。
+顯示單一任務的完整內容（title/body/建立時間等）。用 `ticketId` 查詢時，同一個 ticketId 若有多筆紀錄會全部列出。
 
 ### `coder edit [id]`
 
 ```
 coder edit <id> [--title <title>] [--body <body>] [--status <status>] [--baseBranch <baseBranch>]
-coder edit -t <ticketId> --status ON_HOLD
+coder edit <ticketId> --status ON_HOLD
 ```
 
 直接修改 `tasks.db` 裡一筆任務的欄位，不會觸發 Claude 或任何 git 操作。至少要提供一個要改的欄位。常見用途：`coder edit <id> --status ON_HOLD` 把某個任務標成暫停，讓它不會被 `coder run`（不帶 id 時）撿去跑，也不會被 `coder fetch` 的同步邏輯覆寫。
@@ -117,7 +123,7 @@ coder edit -t <ticketId> --status ON_HOLD
 
 ```
 coder commit <id> [--sessionId <sessionId>]
-coder commit -t <ticketId> [--sessionId <sessionId>]
+coder commit <ticketId> [--sessionId <sessionId>]
 ```
 
 在目前目錄（git repo）的暫存區沒有東西時會直接提示並結束。有暫存變更時：
@@ -136,8 +142,8 @@ coder commit -t <ticketId> [--sessionId <sessionId>]
 ```
 coder run                          # 沒指定 → 跑全部 TODO 任務
 coder run 1 2 3                    # 指定多個 id
-coder run -t TICK-1 -t TICK-2      # 指定多個 ticketId（-t 可重複）
-coder run 1 -t TICK-2              # id 跟 ticketId 可混用，重複解析到同一筆任務會自動去重
+coder run TICK-1 TICK-2            # 指定多個 ticketId
+coder run 1 TICK-2                 # id 跟 ticketId 可混用，重複解析到同一筆任務會自動去重
 ```
 
 針對每一筆任務依序執行：
@@ -158,7 +164,7 @@ coder run 1 -t TICK-2              # id 跟 ticketId 可混用，重複解析到
 
 ```
 coder review <id>
-coder review -t <ticketId>
+coder review <ticketId>
 ```
 
 把 `coder run` 在沙盒裡完成的任務分支拉回主專案，方便你用熟悉的工具（`git diff`、VSCode 等）review：
@@ -174,13 +180,13 @@ coder review -t <ticketId>
 
 ```
 coder close <id>
-coder close -t <ticketId>
+coder close <ticketId>
 coder close              # 沒指定 → 用目前所在的 coder/ 任務分支反推是哪個任務
 ```
 
 預期先用 `coder review` 把任務分支拉到主專案看過、覺得可以合併了，再用這個指令正式收尾（`coder close` 本身不會去 sandbox 拉分支，只認主專案裡已經存在的本地分支）：
 
-1. 找出要關閉的任務：給了 `id` 或 `ticketId` 就用它查；都沒給的話，檢查目前所在的本地分支，如果是 `coder/<baseBranch>/task-<id>-<ticketId>` 這種任務分支，就從分支名稱反推出任務 id（並確認解析出的 baseBranch 跟資料庫紀錄一致，否則報錯）；如果目前分支不是任務分支，就報錯並提示改用 `<id>` 或 `-t`
+1. 找出要關閉的任務：給了 `id` 或 `ticketId` 就用它查；都沒給的話，檢查目前所在的本地分支，如果是 `coder/<baseBranch>/task-<id>-<ticketId>` 這種任務分支，就從分支名稱反推出任務 id（並確認解析出的 baseBranch 跟資料庫紀錄一致，否則報錯）；如果目前分支不是任務分支，就報錯並提示改用 `<id>` 或 `<ticketId>`
 2. 算出分支名稱、確認任務的 `baseBranch` 在主專案裡存在，以及該任務分支也已經存在於主專案（兩者缺一都直接報錯、不做任何變更；後者會提示先執行 `coder review`）
 3. 切換到該分支，`git rebase <baseBranch>` 把它墊到最新的 `baseBranch` 上
 4. 切換到 `baseBranch`，`git merge --ff-only` 合併進去（線性歷史，不會產生 merge commit）

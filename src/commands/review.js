@@ -15,24 +15,23 @@ export function registerReviewCommand(program) {
     .description(
       "Fetch a task's branch from the sandbox into the main project and print its commit message, for review"
     )
-    .option("-t, --ticketId <ticketId>", "依 ticketId 查詢任務（取最新一筆非 DONE 的任務）")
-    .action((id, options) => {
-      runReview(id, options);
+    .action((id) => {
+      runReview(id);
     });
 }
 
-function runReview(id, options) {
+function runReview(id) {
   const projectRoot = process.cwd();
   const coderDir = path.join(projectRoot, ".coder");
   const dbPath = path.join(coderDir, "tasks.db");
 
   try {
-    validateTaskSelector(id, options.ticketId);
+    validateTaskSelector(id);
     if (!fs.existsSync(dbPath)) {
       throw new Error(`${dbPath} 不存在，請先執行 \`coder init\``);
     }
 
-    const task = resolveTaskFromDb(dbPath, id, options.ticketId);
+    const task = resolveTaskFromDb(dbPath, id);
     const sandbox = resolveSandbox(coderDir);
     const branchName = taskBranchName(task);
 
@@ -50,10 +49,10 @@ function runReview(id, options) {
   }
 }
 
-function resolveTaskFromDb(dbPath, id, ticketId) {
+function resolveTaskFromDb(dbPath, id) {
   const db = new Database(dbPath, { readonly: true });
   try {
-    return resolveTask(db, id, ticketId);
+    return resolveTask(db, id);
   } finally {
     db.close();
   }
