@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 import pc from "picocolors";
 
 import { resolveTask } from "../tasks.js";
-import { VALID_STATUSES } from "../statuses.js";
+import { MANUALLY_SETTABLE_STATUSES } from "../statuses.js";
 import { printTask } from "./view.js";
 
 export function registerEditCommand(program) {
@@ -16,7 +16,10 @@ export function registerEditCommand(program) {
     .option("-t, --ticketId <ticketId>", "依 ticketId 查詢任務（取最新一筆非 DONE 的任務）")
     .option("--title <title>", "更新標題")
     .option("--body <body>", "更新內容")
-    .option("--status <status>", `更新狀態 (${VALID_STATUSES.join("/")})`)
+    .option(
+      "--status <status>",
+      `更新狀態 (${MANUALLY_SETTABLE_STATUSES.join("/")}；DONE 只能透過 coder close 設定)`
+    )
     .option("--baseBranch <baseBranch>", "更新 baseBranch")
     .action((id, options) => {
       runEdit(id, options);
@@ -37,9 +40,14 @@ function runEdit(id, options) {
     if (!fs.existsSync(dbPath)) {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
     }
-    if (options.status && !VALID_STATUSES.includes(options.status)) {
+    // options.status is checked with !== undefined (not truthy) so an
+    // explicitly-empty --status "" doesn't slip past validation — a plain
+    // `options.status &&` check would treat "" as "not provided" and let
+    // it through to buildUpdate() as-is, writing an invalid status.
+    if (options.status !== undefined && !MANUALLY_SETTABLE_STATUSES.includes(options.status)) {
       throw new Error(
-        `無效的狀態 "${options.status}"，可用值：${VALID_STATUSES.join(", ")}`
+        `無效的狀態 "${options.status}"，可用值：${MANUALLY_SETTABLE_STATUSES.join(", ")}` +
+          (options.status === "DONE" ? "（DONE 只能透過 coder close 設定）" : "")
       );
     }
 

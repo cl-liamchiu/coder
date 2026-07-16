@@ -12,6 +12,14 @@ export const VALID_STATUSES = [
   "DONE",
 ];
 
+// DONE carries side effects that only `coder close` performs (rebase +
+// fast-forward merge into baseBranch, closedAt timestamp, post-close hook,
+// branch cleanup) — other code (e.g. task-fetch's "all DONE => safe to
+// reopen this ticketId" check) assumes a DONE row really went through that.
+// `coder edit` and `coder fetch` may only set the statuses below; DONE is
+// reachable exclusively through `coder close`.
+export const MANUALLY_SETTABLE_STATUSES = VALID_STATUSES.filter((s) => s !== "DONE");
+
 export const STATUS_COLORS = {
   TODO: pc.cyan,
   IN_PROGRESS: pc.yellow,
