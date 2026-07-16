@@ -116,6 +116,8 @@ function runSingleTask({ task, projectRoot, dbPath, promptPath, settingsPath, sa
 
     const sessionId = runClaudeOnTask({ sandboxPath: sandbox.path, promptPath, settingsPath, task });
 
+    stageAllChanges(sandbox.path);
+
     commitInSandbox({ sandboxPath: sandbox.path, projectRoot, taskId: task.id, sessionId });
 
     setTaskStatus(db, task.id, "IN_REVIEW");
@@ -160,26 +162,44 @@ function createTaskBranch(sandboxPath, branchName, baseBranch) {
   spinner.succeed(`已建立並切換至分支 ${branchName}`);
 }
 
+// No spinner here on purpose — this is a synchronous call that can run for
+// a long time, and an animated spinner would freeze mid-frame for the
+// entire duration (looks like a hang, not "still working"). A static line
+// says up front that there's no progress to show.
 function runClaudeOnTask({ sandboxPath, promptPath, settingsPath, task }) {
-  const spinner = ora("Claude 正在沙盒中執行任務 ...").start();
+  console.log(pc.yellow("⏳ Claude 正在沙盒中執行任務，請稍候（執行時間可能較長，過程中不會顯示進度）..."));
   const stdinInput = `${task.title}\n${task.body ?? ""}`;
 
   let parsed;
   try {
     parsed = runClaudeAgent({ cwd: sandboxPath, promptPath, settingsPath, stdinInput });
   } catch (err) {
-    spinner.fail("Claude 執行任務失敗");
+    console.log(pc.red("❌ Claude 執行任務失敗"));
     throw err;
   }
 
   const sessionId = parsed?.session_id;
   if (!sessionId || typeof sessionId !== "string") {
-    spinner.fail("Claude 回應缺少 session_id 欄位");
+    console.log(pc.red("❌ Claude 回應缺少 session_id 欄位"));
     throw new Error(`claude 輸出缺少有效的 session_id 欄位：${JSON.stringify(parsed)}`);
   }
 
-  spinner.succeed("Claude 已完成任務");
+  console.log(pc.green("✔ Claude 已完成任務"));
   return sessionId;
+}
+
+// Claude isn't guaranteed to `git add` its own changes — `coder commit`
+// only looks at what's staged, so anything left unstaged here would
+// silently produce an empty commit (or "nothing to commit").
+function stageAllChanges(sandboxPath) {
+  const spinner = ora("暫存所有變更 (git add -A) ...").start();
+  try {
+    execFileSync("git", ["add", "-A"], { cwd: sandboxPath, stdio: "pipe" });
+  } catch (err) {
+    spinner.fail("git add -A 失敗");
+    throw new Error(`git add -A 失敗：${err.message}`);
+  }
+  spinner.succeed("已暫存所有變更");
 }
 
 // Shells out to the real `coder commit` binary (rather than calling its

@@ -4,22 +4,14 @@ import Database from "better-sqlite3";
 import Table from "cli-table3";
 import pc from "picocolors";
 
-const VALID_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "REJECTED", "DONE"];
-
-const STATUS_COLORS = {
-  TODO: pc.cyan,
-  IN_PROGRESS: pc.yellow,
-  IN_REVIEW: pc.blue,
-  REJECTED: pc.red,
-  DONE: pc.green,
-};
+import { VALID_STATUSES, STATUS_COLORS } from "../statuses.js";
 
 export function registerListCommand(program) {
   program
     .command("list")
     .description("List tasks stored in .coder/tasks.db (active tasks only by default)")
     .option("-a, --all", "顯示全部任務，包含 DONE")
-    .option("-s, --status <status>", "依狀態精準篩選 (TODO/IN_PROGRESS/IN_REVIEW/REJECTED/DONE)")
+    .option("-s, --status <status>", `依狀態精準篩選 (${VALID_STATUSES.join("/")})`)
     .option("-t, --ticketId <id>", "依 ticketId 部分搜尋")
     .option("-q, --query <keyword>", "依 title/body 內容部分搜尋")
     .action((options) => {
@@ -61,20 +53,28 @@ function runTaskList(options) {
       return;
     }
 
+    // Every column gets a fixed width so the table can never grow past a
+    // predictable size — leaving colWidths unset lets a single long value
+    // stretch the whole row past the terminal width. Title's content is
+    // prose with spaces, so the default word-boundary wrap reads fine.
+    // ticketId/branch are single unbroken tokens (no spaces to break on):
+    // wordWrap's default word-boundary mode would truncate them with "…"
+    // instead of wrapping, so those two cells opt into wrapOnWordBoundary:
+    // false (hard character wrap) to guarantee the full value is visible.
     const table = new Table({
       head: ["ID", "Ticket ID", "Title", "Status", "Branch"],
       wordWrap: true,
-      colWidths: [6, 14, 40, 14, 20],
+      colWidths: [6, 22, 50, 14, 26],
     });
 
     for (const row of rows) {
       const colorize = STATUS_COLORS[row.status] ?? ((text) => text);
       table.push([
         row.id,
-        row.ticketId ?? "-",
+        { content: row.ticketId ?? "-", wrapOnWordBoundary: false },
         row.title,
         colorize(row.status),
-        row.baseBranch,
+        { content: row.baseBranch, wrapOnWordBoundary: false },
       ]);
     }
 

@@ -8,6 +8,7 @@ import pc from "picocolors";
 import { resolveTask } from "../tasks.js";
 import { resolveSandbox } from "../config.js";
 import { taskBranchName, parseTaskBranchName } from "../branch.js";
+import { resolveHook, execHook } from "../hooks.js";
 
 export function registerCloseCommand(program) {
   program
@@ -58,12 +59,12 @@ function runClose(id, options) {
     // DONE first, then treat branch cleanup and the notify hook as
     // best-effort follow-ups that must not make `coder close` report
     // failure for a task that has, in fact, already been merged.
-    markTaskDone(dbPath, task.id);
+    const closedTask = markTaskDone(dbPath, task.id);
     console.log();
     console.log(pc.green(`✔ 任務 #${task.id} 已合併進 ${baseBranch} 並標記為 DONE`));
 
     cleanupBranches({ projectRoot, sandboxPath: sandbox.path, branchName, baseBranch });
-    runPostCloseHook(coderDir, task.id);
+    runPostCloseHook(coderDir, closedTask);
   } catch (err) {
     console.error();
     console.error(pc.red(`❌ close 失敗：${err.message}`));
@@ -104,7 +105,10 @@ function detectTaskFromCurrentBranch(projectRoot, dbPath) {
 function markTaskDone(dbPath, id) {
   const db = new Database(dbPath);
   try {
-    db.prepare("UPDATE tasks SET status = 'DONE', closedAt = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    db.prepare(
+      "UPDATE tasks SET status = 'DONE', closedAt = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(id);
+    return db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
   } finally {
     db.close();
   }
@@ -229,41 +233,24 @@ function cleanupBranches({ projectRoot, sandboxPath, branchName, baseBranch }) {
   }
 }
 
-function runPostCloseHook(coderDir, taskId) {
+// Optional — closing a task without this hook configured is fine. The full
+// task row (id, ticketId, title, body, status: 'DONE', baseBranch,
+// createdAt, closedAt) is passed as JSON on stdin — a single source of
+// truth, so the hook can act on any field without having to query
+// .coder/tasks.db itself.
+function runPostCloseHook(coderDir, task) {
   const hooksDir = path.join(coderDir, "hooks");
-  const hookPath = resolvePostCloseHook(hooksDir);
+  const hookPath = resolveHook(hooksDir, "post-close", { required: false });
   if (!hookPath) return;
 
-  const spinner = ora("執行 post-task-close 腳本 ...").start();
+  const spinner = ora("執行 post-close 腳本 ...").start();
   try {
-    const isJs = hookPath.endsWith(".js");
-    if (isJs) {
-      execFileSync(process.execPath, [hookPath, String(taskId)], { stdio: "inherit" });
-    } else {
-      execFileSync(hookPath, [String(taskId)], { stdio: "inherit" });
-    }
-    spinner.succeed("post-task-close 腳本執行完成");
+    execHook(hookPath, [], {
+      stdio: ["pipe", "inherit", "inherit"],
+      input: JSON.stringify(task),
+    });
+    spinner.succeed("post-close 腳本執行完成");
   } catch (err) {
-    spinner.warn(`post-task-close 腳本執行失敗（已略過）：${err.message}`);
+    spinner.warn(`post-close 腳本執行失敗（已略過）：${err.message}`);
   }
-}
-
-// Same resolution convention as task-fetch (extensionless shebang script
-// preferred, .js as a Windows-compatible fallback), but optional — closing
-// a task without this hook configured is fine.
-function resolvePostCloseHook(hooksDir) {
-  if (process.platform === "win32") {
-    const jsPath = path.join(hooksDir, "post-task-close.js");
-    return fs.existsSync(jsPath) && fs.statSync(jsPath).isFile() ? jsPath : null;
-  }
-
-  const plainPath = path.join(hooksDir, "post-task-close");
-  if (fs.existsSync(plainPath) && fs.statSync(plainPath).isFile()) {
-    return plainPath;
-  }
-  const jsPath = path.join(hooksDir, "post-task-close.js");
-  if (fs.existsSync(jsPath) && fs.statSync(jsPath).isFile()) {
-    return jsPath;
-  }
-  return null;
 }

@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
 import ora from "ora";
 import pc from "picocolors";
+
+import { resolveHook, execHook } from "../hooks.js";
+import { VALID_STATUSES } from "../statuses.js";
 
 export function registerFetchCommand(program) {
   program
@@ -30,7 +32,7 @@ function runTaskFetch() {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
     }
 
-    const hookPath = resolveTaskFetchHook(hooksDir);
+    const hookPath = resolveHook(hooksDir, "task-fetch", { required: true });
     const stdout = runHook(hookPath);
     const tasks = parseTaskArray(stdout);
 
@@ -65,57 +67,13 @@ function runTaskFetch() {
   }
 }
 
-// Prefer an extensionless executable (shebang script), then a .js file run
-// explicitly via node. If only the shipped .sample exists, tell the user to
-// rename it rather than silently running the placeholder.
-//
-// Windows has no shebang support — execFileSync spawns files directly via
-// the OS, which never interprets "#!/usr/bin/env node". So on win32 we only
-// ever look for task-fetch.js, which we invoke explicitly via node.
-function resolveTaskFetchHook(hooksDir) {
-  const jsPath = path.join(hooksDir, "task-fetch.js");
-  const samplePath = path.join(hooksDir, "task-fetch.sample");
-
-  if (process.platform === "win32") {
-    if (fs.existsSync(jsPath) && fs.statSync(jsPath).isFile()) {
-      return jsPath;
-    }
-    if (fs.existsSync(samplePath)) {
-      throw new Error(
-        "找不到 task-fetch 腳本，僅發現範本 .coder/hooks/task-fetch.sample，請將其重新命名為 task-fetch.js 後再試一次（Windows 不支援 shebang，僅支援 .js）"
-      );
-    }
-    throw new Error("找不到 .coder/hooks/task-fetch.js，請先建立任務抓取腳本");
-  }
-
-  const plainPath = path.join(hooksDir, "task-fetch");
-
-  if (fs.existsSync(plainPath) && fs.statSync(plainPath).isFile()) {
-    return plainPath;
-  }
-  if (fs.existsSync(jsPath) && fs.statSync(jsPath).isFile()) {
-    return jsPath;
-  }
-  if (fs.existsSync(samplePath)) {
-    throw new Error(
-      "找不到 task-fetch 腳本，僅發現範本 .coder/hooks/task-fetch.sample，請將其重新命名為 task-fetch 或 task-fetch.js 後再試一次"
-    );
-  }
-  throw new Error("找不到 .coder/hooks/task-fetch 或 task-fetch.js，請先建立任務抓取腳本");
-}
-
 function runHook(hookPath) {
   const spinner = ora("執行 task-fetch 腳本 ...").start();
 
   try {
-    const isJs = hookPath.endsWith(".js");
-    const stdout = isJs
-      ? execFileSync(process.execPath, [hookPath], {
-          stdio: ["inherit", "pipe", "inherit"],
-        })
-      : execFileSync(hookPath, [], {
-          stdio: ["inherit", "pipe", "inherit"],
-        });
+    const stdout = execHook(hookPath, [], {
+      stdio: ["inherit", "pipe", "inherit"],
+    });
 
     spinner.succeed("task-fetch 腳本執行完成");
     return stdout.toString("utf8");
@@ -152,6 +110,7 @@ function syncOneTask(db, task) {
   const body = task?.body ?? null;
   const baseBranch = task?.baseBranch;
   const ticketId = task?.ticketId ?? null;
+  const status = task?.status ?? "TODO";
 
   if (!title || typeof title !== "string") {
     throw new Error(`任務缺少必要欄位 title：${JSON.stringify(task)}`);
@@ -159,11 +118,16 @@ function syncOneTask(db, task) {
   if (!baseBranch || typeof baseBranch !== "string") {
     throw new Error(`任務缺少必要欄位 baseBranch：${JSON.stringify(task)}`);
   }
+  if (!VALID_STATUSES.includes(status)) {
+    throw new Error(
+      `任務的 status 不合法："${status}"，可用值：${VALID_STATUSES.join(", ")}：${JSON.stringify(task)}`
+    );
+  }
 
   // No ticketId means we can't dedupe/correlate against existing rows —
   // always insert as a new task.
   if (!ticketId) {
-    insertTask(db, { title, body, baseBranch, ticketId: null });
+    insertTask(db, { title, body, baseBranch, ticketId: null, status });
     return "added";
   }
 
@@ -173,29 +137,28 @@ function syncOneTask(db, task) {
 
   // Scenario A: brand new ticketId, or every existing record for it is DONE.
   if (rows.length === 0 || rows.every((row) => row.status === "DONE")) {
-    insertTask(db, { title, body, baseBranch, ticketId });
+    insertTask(db, { title, body, baseBranch, ticketId, status });
     return "added";
   }
 
   const latest = rows[rows.length - 1];
 
-  // Scenario B: local task hasn't been started yet — refresh its content.
+  // Scenario B: local task hasn't been started yet — refresh its content,
+  // including status (e.g. so a source can pause it by sending ON_HOLD).
   if (latest.status === "TODO") {
-    db.prepare("UPDATE tasks SET title = ?, body = ?, baseBranch = ? WHERE id = ?").run(
-      title,
-      body,
-      baseBranch,
-      latest.id
-    );
+    db.prepare(
+      "UPDATE tasks SET title = ?, body = ?, baseBranch = ?, status = ? WHERE id = ?"
+    ).run(title, body, baseBranch, status, latest.id);
     return "updated";
   }
 
-  // Scenario C: IN_PROGRESS / IN_REVIEW / REJECTED — protect in-flight work.
+  // Scenario C: IN_PROGRESS / IN_REVIEW / ON_HOLD / REJECTED — protect
+  // in-flight or intentionally-paused work from being overwritten.
   return "skipped";
 }
 
-function insertTask(db, { title, body, baseBranch, ticketId }) {
+function insertTask(db, { title, body, baseBranch, ticketId, status }) {
   db.prepare(
-    `INSERT INTO tasks (title, body, status, baseBranch, ticketId) VALUES (?, ?, 'TODO', ?, ?)`
-  ).run(title, body, baseBranch, ticketId);
+    `INSERT INTO tasks (title, body, status, baseBranch, ticketId) VALUES (?, ?, ?, ?, ?)`
+  ).run(title, body, status, baseBranch, ticketId);
 }

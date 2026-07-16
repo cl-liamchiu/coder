@@ -3,13 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import pc from "picocolors";
 
-const STATUS_COLORS = {
-  TODO: pc.cyan,
-  IN_PROGRESS: pc.yellow,
-  IN_REVIEW: pc.blue,
-  REJECTED: pc.red,
-  DONE: pc.green,
-};
+import { STATUS_COLORS } from "../statuses.js";
 
 export function registerViewCommand(program) {
   program
@@ -73,7 +67,7 @@ function runTaskView(id, options) {
   }
 }
 
-function printTask(row) {
+export function printTask(row) {
   const colorize = STATUS_COLORS[row.status] ?? ((text) => text);
 
   console.log(

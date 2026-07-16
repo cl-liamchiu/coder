@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# Sample hook: post-close
+#
+# coder calls this script after a task's status transitions to DONE.
+#
+# Contract: stdin is the full task row as JSON: {id, ticketId, title, body,
+# status, baseBranch, createdAt, closedAt}.
+#
+# Requires `jq` to parse the JSON payload.
+
+set -euo pipefail
+
+task_json="$(cat)"
+
+task_id="$(jq -r '.id' <<<"$task_json")"
+ticket_id="$(jq -r '.ticketId // "-"' <<<"$task_json")"
+title="$(jq -r '.title' <<<"$task_json")"
+
+echo "[post-close] task #${task_id} (${ticket_id}) closed: ${title}"
+
+# TODO: notify your task tracker / trigger downstream automation here.

@@ -137,8 +137,8 @@ function writeTemplates(coderDir) {
 
   const executableFiles = [
     ["hooks/task-fetch.sample", path.join(hooksDir, "task-fetch.sample")],
-    ["hooks/format-commit-msg.js.sample", path.join(hooksDir, "format-commit-msg.js.sample")],
-    ["hooks/post-task-close.sample", path.join(hooksDir, "post-task-close.sample")],
+    ["hooks/format-commit-msg.sample", path.join(hooksDir, "format-commit-msg.sample")],
+    ["hooks/post-close.sample", path.join(hooksDir, "post-close.sample")],
   ];
 
   for (const [srcRel, destPath] of executableFiles) {

@@ -7,6 +7,7 @@ import pc from "picocolors";
 
 import { runClaudeAgent } from "../claude.js";
 import { resolveTask as resolveTaskRow } from "../tasks.js";
+import { resolveHook, execHook } from "../hooks.js";
 
 export function registerCommitCommand(program) {
   program
@@ -73,7 +74,7 @@ function runCommit(id, options) {
       sessionId: options.sessionId,
     });
 
-    commitMessage = formatCommitMessage(coderDir, workDir, commitMessage);
+    commitMessage = formatCommitMessage(coderDir, workDir, commitMessage, task);
 
     commitStaged(workDir, commitMessage);
 
@@ -104,8 +105,11 @@ function resolveTask(dbPath, id, ticketId) {
   }
 }
 
+// No spinner here on purpose — see the comment in run.js's runClaudeOnTask()
+// for why: an animated spinner around a long synchronous call just freezes
+// mid-frame and reads as a hang.
 function generateCommitMessage({ workDir, promptPath, settingsPath, task, sessionId }) {
-  const spinner = ora("請 Claude 撰寫 commit message ...").start();
+  console.log(pc.yellow("⏳ 請 Claude 撰寫 commit message，請稍候..."));
 
   const stdinInput = `${task.title}\n${task.body ?? ""}`;
 
@@ -113,17 +117,17 @@ function generateCommitMessage({ workDir, promptPath, settingsPath, task, sessio
   try {
     parsed = runClaudeAgent({ cwd: workDir, promptPath, settingsPath, stdinInput, sessionId });
   } catch (err) {
-    spinner.fail("Claude 執行失敗");
+    console.log(pc.red("❌ Claude 執行失敗"));
     throw err;
   }
 
   const result = parsed?.result;
   if (!result || typeof result !== "string" || result.trim() === "") {
-    spinner.fail("Claude 回應缺少 result 欄位");
+    console.log(pc.red("❌ Claude 回應缺少 result 欄位"));
     throw new Error(`claude 輸出缺少有效的 result 欄位：${JSON.stringify(parsed)}`);
   }
 
-  spinner.succeed("Claude 已產生 commit message");
+  console.log(pc.green("✔ Claude 已產生 commit message"));
   return result.trim();
 }
 
@@ -134,23 +138,26 @@ function commitStaged(workDir, commitMessage) {
   });
 }
 
-// Optional — if .coder/hooks/format-commit-msg.js doesn't exist, Claude's
-// message is used as-is. If it does exist and fails, that's fatal: we don't
-// yet have a valid message to commit with, so better to stop loudly than
-// commit something unformatted.
-function formatCommitMessage(coderDir, workDir, rawMessage) {
-  const hookPath = path.join(coderDir, "hooks", "format-commit-msg.js");
-  if (!fs.existsSync(hookPath) || !fs.statSync(hookPath).isFile()) {
+// Optional — if no format-commit-msg hook exists, Claude's message is used
+// as-is. If it does exist and fails, that's fatal: we don't yet have a
+// valid message to commit with, so better to stop loudly than commit
+// something unformatted.
+function formatCommitMessage(coderDir, workDir, rawMessage, task) {
+  const hooksDir = path.join(coderDir, "hooks");
+  const hookPath = resolveHook(hooksDir, "format-commit-msg", { required: false });
+  if (!hookPath) {
     return rawMessage;
   }
 
   const spinner = ora("執行 format-commit-msg 腳本 ...").start();
 
+  const payload = JSON.stringify({ message: rawMessage, task });
+
   let stdout;
   try {
-    stdout = execFileSync(process.execPath, [hookPath], {
+    stdout = execHook(hookPath, [], {
       cwd: workDir,
-      input: rawMessage,
+      input: payload,
       encoding: "utf8",
     });
   } catch (err) {
