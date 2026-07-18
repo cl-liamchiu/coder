@@ -1,10 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import readline from "node:readline/promises";
 import Database from "better-sqlite3";
 import pc from "picocolors";
 
 import { resolveTask, validateTaskSelector, updateTaskById } from "../tasks.js";
-import { MANUALLY_SETTABLE_STATUSES, assertManuallySettableStatus } from "../statuses.js";
+import {
+  MANUALLY_SETTABLE_STATUSES,
+  STATUS_COLORS,
+  assertManuallySettableStatus,
+} from "../statuses.js";
 import { printTask } from "./view.js";
 
 export function registerEditCommand(program) {
@@ -13,19 +18,48 @@ export function registerEditCommand(program) {
     .description(
       "Edit a task's fields directly in .coder/tasks.db (title/body/status/baseBranch)"
     )
-    .option("--title <title>", "更新標題")
-    .option("--body <body>", "更新內容")
+    .option("-t, --title <title>", "更新標題")
+    .option("-b, --body <body>", "更新內容")
     .option(
-      "--status <status>",
-      `更新狀態 (${MANUALLY_SETTABLE_STATUSES.join("/")}；DONE 只能透過 coder close 設定)`
+      "-s, --status [status]",
+      `更新狀態 (${MANUALLY_SETTABLE_STATUSES.join("/")}；DONE 只能透過 coder close 設定)。不帶值時會跳出選單`
     )
     .option("--baseBranch <baseBranch>", "更新 baseBranch")
-    .action((id, options) => {
-      runEdit(id, options);
+    .action(async (id, options) => {
+      await runEdit(id, options);
     });
 }
 
-function runEdit(id, options) {
+async function promptForStatus() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log(pc.bold("選擇狀態："));
+    MANUALLY_SETTABLE_STATUSES.forEach((status, i) => {
+      const color = STATUS_COLORS[status] ?? ((s) => s);
+      console.log(`  ${i + 1}) ${color(status)}`);
+    });
+    for (;;) {
+      const answer = (await rl.question("輸入編號或狀態名稱: ")).trim();
+      const byIndex = MANUALLY_SETTABLE_STATUSES[Number(answer) - 1];
+      if (byIndex) {
+        return byIndex;
+      }
+      const byName = MANUALLY_SETTABLE_STATUSES.find(
+        (s) => s.toLowerCase() === answer.toLowerCase()
+      );
+      if (byName) {
+        return byName;
+      }
+      console.log(
+        pc.red(`無效輸入，請輸入 1-${MANUALLY_SETTABLE_STATUSES.length} 的編號或狀態名稱`)
+      );
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+async function runEdit(id, options) {
   const projectRoot = process.cwd();
   const dbPath = path.join(projectRoot, ".coder", "tasks.db");
 
@@ -33,6 +67,12 @@ function runEdit(id, options) {
     validateTaskSelector(id);
     if (!fs.existsSync(dbPath)) {
       throw new Error(".coder/tasks.db 不存在，請先執行 `coder init`");
+    }
+    // commander turns bare `--status` (no value) into boolean `true`; `--status`
+    // never given stays `undefined`. Only the boolean case should trigger the
+    // picker — undefined must keep meaning "field not touched" below.
+    if (options.status === true) {
+      options.status = await promptForStatus();
     }
     // options.status is checked with !== undefined (not truthy) so an
     // explicitly-empty --status "" doesn't slip past validation — a plain

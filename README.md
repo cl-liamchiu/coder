@@ -111,11 +111,14 @@ coder view <ticketId>
 ### `coder edit [id]`
 
 ```
-coder edit <id> [--title <title>] [--body <body>] [--status <status>] [--baseBranch <baseBranch>]
-coder edit <ticketId> --status ON_HOLD
+coder edit <id> [-t/--title <title>] [-b/--body <body>] [-s/--status <status>] [--baseBranch <baseBranch>]
+coder edit <ticketId> -s ON_HOLD
+coder edit <id> -s   # 不帶值 => 跳出互動選單挑狀態
 ```
 
 直接修改 `tasks.db` 裡一筆任務的欄位，不會觸發 Claude 或任何 git 操作。至少要提供一個要改的欄位。常見用途：`coder edit <id> --status ON_HOLD` 把某個任務標成暫停，讓它不會被 `coder run`（不帶 id 時）撿去跑，也不會被 `coder fetch` 的同步邏輯覆寫。
+
+`--status` 不帶值時會列出可設定的狀態讓你輸入編號或名稱挑選，而不用自己記狀態字串怎麼拼。
 
 `--status` 不能設成 `DONE`——`DONE` 只能透過 `coder close` 的完整流程（merge、`closedAt`、`post-close` hook、刪分支）產生，用 `edit` 直接改欄位會繞過這些，讓資料跟實際狀態不一致。
 
