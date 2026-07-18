@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner, printWaiting } from "../spinner.js";
 import pc from "picocolors";
 
 import { runClaudeAgent } from "../claude.js";
@@ -99,11 +99,11 @@ function resolveTask(dbPath, id) {
   }
 }
 
-// No spinner here on purpose — see the comment in run.js's runClaudeOnTask()
-// for why: an animated spinner around a long synchronous call just freezes
-// mid-frame and reads as a hang.
+// No spinner here on purpose — see printWaiting() in spinner.js for why: an
+// animated spinner around a long synchronous call just freezes mid-frame
+// and reads as a hang.
 function generateCommitMessage({ workDir, promptPath, settingsPath, task, sessionId }) {
-  console.log(pc.yellow("⏳ 請 Claude 撰寫 commit message，請稍候..."));
+  printWaiting("請 Claude 撰寫 commit message，請稍候...");
 
   const stdinInput = `${task.title}\n${task.body ?? ""}`;
 
@@ -143,7 +143,7 @@ function formatCommitMessage(coderDir, workDir, rawMessage, task) {
     return rawMessage;
   }
 
-  const spinner = ora("執行 format-commit-msg 腳本 ...").start();
+  const spinner = createSpinner("執行 format-commit-msg 腳本 ...").start();
 
   const payload = JSON.stringify({ message: rawMessage, task });
 

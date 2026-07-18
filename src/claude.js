@@ -4,7 +4,7 @@
 //
 // Deliberately synchronous (execFileSync) rather than spawn()+Promise: this
 // call can run for a long time (Claude working autonomously on a task), and
-// an async spawn lets the event loop keep running an ora spinner underneath
+// an async spawn lets the event loop keep running a spinner underneath
 // it — but the spinner's animation freezing mid-frame the instant the
 // terminal is slow/backgrounded (or just because nothing changed for a
 // while) reads as "stuck/crashed", which is worse than admitting up front

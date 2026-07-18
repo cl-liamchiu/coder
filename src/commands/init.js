@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner } from "../spinner.js";
 import pc from "picocolors";
 
 import { upsertSandboxConfig } from "../config.js";
@@ -64,7 +64,7 @@ function runInit(remoteName, sandboxPathArg) {
         pc.yellow("⚠ .coder/ 於執行前已存在，保留現有內容，不予刪除")
       );
     } else {
-      const cleanup = ora("清理 .coder/ ...").start();
+      const cleanup = createSpinner("清理 .coder/ ...").start();
       try {
         fs.rmSync(coderDir, { recursive: true, force: true });
         cleanup.succeed("已清理 .coder/");
@@ -74,7 +74,7 @@ function runInit(remoteName, sandboxPathArg) {
     }
 
     if (sandboxDirCreatedByUs) {
-      const sandboxCleanup = ora(`清理沙盒目錄 ${sandboxPath} ...`).start();
+      const sandboxCleanup = createSpinner(`清理沙盒目錄 ${sandboxPath} ...`).start();
       try {
         fs.rmSync(sandboxPath, { recursive: true, force: true });
         sandboxCleanup.succeed("已清理沙盒目錄");
@@ -88,7 +88,7 @@ function runInit(remoteName, sandboxPathArg) {
 }
 
 function initCoderDir(projectRoot, coderDir) {
-  const spinner = ora("建立 .coder/ 目錄結構 ...").start();
+  const spinner = createSpinner("建立 .coder/ 目錄結構 ...").start();
   const hooksDir = path.join(coderDir, "hooks");
   const promptsDir = path.join(coderDir, "prompts");
 
@@ -99,7 +99,7 @@ function initCoderDir(projectRoot, coderDir) {
 }
 
 function ensureGitignoreEntry(projectRoot) {
-  const spinner = ora("檢查 .gitignore ...").start();
+  const spinner = createSpinner("檢查 .gitignore ...").start();
   const gitignorePath = path.join(projectRoot, ".gitignore");
 
   const gitignoreExisted = fs.existsSync(gitignorePath);
@@ -131,7 +131,7 @@ function ensureGitignoreEntry(projectRoot) {
 }
 
 function writeTemplates(coderDir) {
-  const spinner = ora("寫入範本與設定檔 ...").start();
+  const spinner = createSpinner("寫入範本與設定檔 ...").start();
   const hooksDir = path.join(coderDir, "hooks");
   const promptsDir = path.join(coderDir, "prompts");
 
@@ -168,7 +168,7 @@ function copyIfMissing(srcPath, destPath) {
 }
 
 function initDatabase(coderDir) {
-  const spinner = ora("初始化 .coder/tasks.db ...").start();
+  const spinner = createSpinner("初始化 .coder/tasks.db ...").start();
   const dbPath = path.join(coderDir, "tasks.db");
 
   const db = new Database(dbPath);
@@ -193,7 +193,7 @@ function initDatabase(coderDir) {
 }
 
 function createSandbox(sandboxPath) {
-  const spinner = ora(`建立沙盒目錄 ${sandboxPath} ...`).start();
+  const spinner = createSpinner(`建立沙盒目錄 ${sandboxPath} ...`).start();
   let createdByUs = false;
 
   if (fs.existsSync(sandboxPath)) {
@@ -232,7 +232,7 @@ function createSandbox(sandboxPath) {
 // inherited global config) makes `git commit` fail there. We can't safely
 // pick an identity on the user's behalf, so just surface what will happen.
 function checkGitAuthor(sandboxPath) {
-  const spinner = ora("檢查沙盒 git 作者設定 ...").start();
+  const spinner = createSpinner("檢查沙盒 git 作者設定 ...").start();
 
   const name = readGitConfig(sandboxPath, "user.name");
   const email = readGitConfig(sandboxPath, "user.email");
@@ -272,7 +272,7 @@ function readGitConfig(cwd, key) {
 }
 
 function addRemote(projectRoot, remoteName, sandboxPath) {
-  const spinner = ora(`綁定 git remote "${remoteName}" ...`).start();
+  const spinner = createSpinner(`綁定 git remote "${remoteName}" ...`).start();
 
   try {
     execFileSync("git", ["remote", "add", remoteName, sandboxPath], {

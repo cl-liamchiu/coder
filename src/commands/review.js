@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner } from "../spinner.js";
 import pc from "picocolors";
 
 import { resolveTask, validateTaskSelector } from "../tasks.js";
@@ -59,7 +59,7 @@ function resolveTaskFromDb(dbPath, id) {
 }
 
 function fetchTaskBranch(projectRoot, sandboxName, branchName) {
-  const spinner = ora(`從 sandbox "${sandboxName}" 拉取分支 ${branchName} ...`).start();
+  const spinner = createSpinner(`從 sandbox "${sandboxName}" 拉取分支 ${branchName} ...`).start();
   try {
     execFileSync("git", ["fetch", sandboxName, branchName], {
       cwd: projectRoot,
@@ -77,7 +77,7 @@ function fetchTaskBranch(projectRoot, sandboxName, branchName) {
 // -B creates the branch if it's the first review, or resets it to match the
 // sandbox's tip if it already existed from a previous review of this task.
 function checkoutTaskBranch(projectRoot, branchName) {
-  const spinner = ora(`切換到分支 ${branchName} ...`).start();
+  const spinner = createSpinner(`切換到分支 ${branchName} ...`).start();
   try {
     execFileSync("git", ["checkout", "-B", branchName, "FETCH_HEAD"], {
       cwd: projectRoot,

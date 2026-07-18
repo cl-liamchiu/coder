@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner, printWaiting } from "../spinner.js";
 import pc from "picocolors";
 
 import { runClaudeAgent } from "../claude.js";
@@ -122,7 +122,7 @@ function setTaskStatus(db, id, status) {
 }
 
 function pushBaseBranch(projectRoot, sandboxName, baseBranch) {
-  const spinner = ora(`推送 ${baseBranch} 到 sandbox "${sandboxName}" ...`).start();
+  const spinner = createSpinner(`推送 ${baseBranch} 到 sandbox "${sandboxName}" ...`).start();
   try {
     execFileSync("git", ["push", sandboxName, baseBranch], {
       cwd: projectRoot,
@@ -136,7 +136,7 @@ function pushBaseBranch(projectRoot, sandboxName, baseBranch) {
 }
 
 function createTaskBranch(sandboxPath, branchName, baseBranch) {
-  const spinner = ora(`建立任務分支 ${branchName} ...`).start();
+  const spinner = createSpinner(`建立任務分支 ${branchName} ...`).start();
   try {
     execFileSync("git", ["checkout", "-b", branchName, baseBranch], {
       cwd: sandboxPath,
@@ -149,12 +149,12 @@ function createTaskBranch(sandboxPath, branchName, baseBranch) {
   spinner.succeed(`已建立並切換至分支 ${branchName}`);
 }
 
-// No spinner here on purpose — this is a synchronous call that can run for
-// a long time, and an animated spinner would freeze mid-frame for the
-// entire duration (looks like a hang, not "still working"). A static line
-// says up front that there's no progress to show.
+// No spinner here on purpose — see printWaiting() in spinner.js for why: an
+// animated spinner around a long synchronous call just freezes mid-frame
+// and reads as a hang. A static line says up front that there's no
+// progress to show.
 function runClaudeOnTask({ sandboxPath, promptPath, settingsPath, task }) {
-  console.log(pc.yellow("⏳ Claude 正在沙盒中執行任務，請稍候（執行時間可能較長，過程中不會顯示進度）..."));
+  printWaiting("Claude 正在沙盒中執行任務，請稍候（執行時間可能較長，過程中不會顯示進度）...");
   const stdinInput = `${task.title}\n${task.body ?? ""}`;
 
   let parsed;
@@ -179,7 +179,7 @@ function runClaudeOnTask({ sandboxPath, promptPath, settingsPath, task }) {
 // only looks at what's staged, so anything left unstaged here would
 // silently produce an empty commit (or "nothing to commit").
 function stageAllChanges(sandboxPath) {
-  const spinner = ora("暫存所有變更 (git add -A) ...").start();
+  const spinner = createSpinner("暫存所有變更 (git add -A) ...").start();
   try {
     execFileSync("git", ["add", "-A"], { cwd: sandboxPath, stdio: "pipe" });
   } catch (err) {
@@ -217,7 +217,7 @@ function commitInSandbox({ sandboxPath, projectRoot, taskId, sessionId }) {
 // which step failed. Never throws: a cleanup failure must not mask the
 // original error that triggered it.
 function rollbackSandbox(sandboxPath, baseBranch, branchName) {
-  const spinner = ora("執行失敗，正在復原沙盒狀態 ...").start();
+  const spinner = createSpinner("執行失敗，正在復原沙盒狀態 ...").start();
   try {
     execFileSync("git", ["reset", "--hard"], { cwd: sandboxPath, stdio: "pipe" });
     execFileSync("git", ["clean", "-fd"], { cwd: sandboxPath, stdio: "pipe" });

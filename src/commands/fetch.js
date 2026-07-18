@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner } from "../spinner.js";
 import pc from "picocolors";
 
 import { resolveHook, execHook } from "../hooks.js";
@@ -68,7 +68,7 @@ function runTaskFetch() {
 }
 
 function runHook(hookPath) {
-  const spinner = ora("執行 task-fetch 腳本 ...").start();
+  const spinner = createSpinner("執行 task-fetch 腳本 ...").start();
 
   try {
     const stdout = execHook(hookPath, [], {

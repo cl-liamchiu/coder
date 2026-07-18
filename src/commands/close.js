@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import ora from "ora";
+import { createSpinner } from "../spinner.js";
 import pc from "picocolors";
 
 import { resolveTask, validateTaskSelector, updateTaskById } from "../tasks.js";
@@ -143,7 +143,7 @@ function mergeTaskIntoBase({ projectRoot, branchName, baseBranch }) {
 }
 
 function checkoutTaskBranch(projectRoot, branchName) {
-  const spinner = ora(`切換到分支 ${branchName} ...`).start();
+  const spinner = createSpinner(`切換到分支 ${branchName} ...`).start();
   try {
     execFileSync("git", ["checkout", branchName], { cwd: projectRoot, stdio: "pipe" });
   } catch (err) {
@@ -154,7 +154,7 @@ function checkoutTaskBranch(projectRoot, branchName) {
 }
 
 function rebaseOntoBase(projectRoot, branchName, baseBranch) {
-  const spinner = ora(`將 ${branchName} rebase 到最新的 ${baseBranch} ...`).start();
+  const spinner = createSpinner(`將 ${branchName} rebase 到最新的 ${baseBranch} ...`).start();
   try {
     execFileSync("git", ["rebase", baseBranch], { cwd: projectRoot, stdio: "pipe" });
   } catch (err) {
@@ -165,7 +165,7 @@ function rebaseOntoBase(projectRoot, branchName, baseBranch) {
 }
 
 function ffMergeIntoBase(projectRoot, branchName, baseBranch) {
-  const spinner = ora(`切換到 ${baseBranch} 並 fast-forward 合併 ${branchName} ...`).start();
+  const spinner = createSpinner(`切換到 ${baseBranch} 並 fast-forward 合併 ${branchName} ...`).start();
   try {
     execFileSync("git", ["checkout", baseBranch], { cwd: projectRoot, stdio: "pipe" });
     execFileSync("git", ["merge", "--ff-only", branchName], { cwd: projectRoot, stdio: "pipe" });
@@ -206,7 +206,7 @@ function isMergeInProgress(cwd) {
 // Cleanup after a successful merge — the task is already DONE at this
 // point, so a failure here is a warning, not a command failure.
 function cleanupBranches({ projectRoot, sandboxPath, branchName, baseBranch }) {
-  const mainSpinner = ora(`刪除主專案分支 ${branchName} ...`).start();
+  const mainSpinner = createSpinner(`刪除主專案分支 ${branchName} ...`).start();
   try {
     execFileSync("git", ["branch", "-D", branchName], { cwd: projectRoot, stdio: "pipe" });
     mainSpinner.succeed(`已刪除主專案分支 ${branchName}`);
@@ -214,7 +214,7 @@ function cleanupBranches({ projectRoot, sandboxPath, branchName, baseBranch }) {
     mainSpinner.warn(`刪除主專案分支 ${branchName} 失敗，請自行清理：${err.message}`);
   }
 
-  const sandboxSpinner = ora(`刪除 sandbox 分支 ${branchName} ...`).start();
+  const sandboxSpinner = createSpinner(`刪除 sandbox 分支 ${branchName} ...`).start();
   try {
     // coder run leaves the sandbox checked out on the task branch, so hop
     // back to baseBranch first — git refuses to delete the current branch.
@@ -236,7 +236,7 @@ function runPostCloseHook(coderDir, task) {
   const hookPath = resolveHook(hooksDir, "post-close", { required: false });
   if (!hookPath) return;
 
-  const spinner = ora("執行 post-close 腳本 ...").start();
+  const spinner = createSpinner("執行 post-close 腳本 ...").start();
   try {
     execHook(hookPath, [], {
       stdio: ["pipe", "inherit", "inherit"],
