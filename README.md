@@ -94,10 +94,10 @@ TODO ──(coder run 開始)──▶ IN_PROGRESS ──(成功)──▶ IN_RE
 ### `coder list`
 
 ```
-coder list [-a|--all] [-s|--status <status>] [-t|--ticketId <id>] [-q|--query <keyword>]
+coder list [-a|--all] [-s|--status <status>] [-q|--query <keyword>]
 ```
 
-預設隱藏 `DONE` 的任務。`-a` 顯示全部；`-s` 精準篩選單一狀態（會蓋過預設的隱藏行為）；`-t`/`-q` 是部分比對搜尋，可以疊加使用。
+預設隱藏 `DONE` 的任務。`-a` 顯示全部；`-s` 精準篩選單一狀態（會蓋過預設的隱藏行為）；`-q` 是部分比對搜尋（title/body），可以疊加使用。
 
 ### `coder view [id]`
 

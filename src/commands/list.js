@@ -12,7 +12,6 @@ export function registerListCommand(program) {
     .description("List tasks stored in .coder/tasks.db (active tasks only by default)")
     .option("-a, --all", "顯示全部任務，包含 DONE")
     .option("-s, --status <status>", `依狀態精準篩選 (${VALID_STATUSES.join("/")})`)
-    .option("-t, --ticketId <id>", "依 ticketId 部分搜尋")
     .option("-q, --query <keyword>", "依 title/body 內容部分搜尋")
     .action((options) => {
       runTaskList(options);
@@ -89,7 +88,7 @@ function runTaskList(options) {
 // Every filter is ANDed together. -s pins an exact status and overrides the
 // "hide DONE by default" behavior; -a only lifts that default when -s isn't
 // given (so combining -a with -s DONE is just redundant, not a conflict).
-function buildFilter({ all, status, ticketId, query }) {
+function buildFilter({ all, status, query }) {
   const clauses = [];
   const params = [];
 
@@ -98,11 +97,6 @@ function buildFilter({ all, status, ticketId, query }) {
     params.push(status);
   } else if (!all) {
     clauses.push("status != 'DONE'");
-  }
-
-  if (ticketId) {
-    clauses.push("ticketId LIKE ?");
-    params.push(`%${ticketId}%`);
   }
 
   if (query) {
