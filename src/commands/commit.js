@@ -136,6 +136,14 @@ function commitStaged(workDir, commitMessage) {
 // as-is. If it does exist and fails, that's fatal: we don't yet have a
 // valid message to commit with, so better to stop loudly than commit
 // something unformatted.
+//
+// stdout is JSON, same as every other hook's data-carrying stream (see
+// task-fetch's parseTaskArray): { "message": "<final commit message>" }.
+// A plain-text contract here couldn't tell a stray debug line the hook
+// forgot to send to stderr apart from real message content — any non-empty
+// stdout would silently become part of (or the whole of) the commit
+// message. Requiring JSON means that stray text breaks JSON.parse and
+// fails loudly instead of getting committed.
 function formatCommitMessage(coderDir, workDir, rawMessage, task) {
   const hooksDir = path.join(coderDir, "hooks");
   const hookPath = resolveHook(hooksDir, "format-commit-msg", { required: false });
@@ -159,10 +167,26 @@ function formatCommitMessage(coderDir, workDir, rawMessage, task) {
     throw new Error(`format-commit-msg 執行失敗：${err.message}`);
   }
 
-  const formatted = stdout.trim();
-  if (formatted === "") {
+  const trimmed = stdout.trim();
+  if (trimmed === "") {
     spinner.fail("format-commit-msg 腳本沒有輸出任何內容");
     throw new Error("format-commit-msg 腳本的 stdout 為空，無法作為 commit message");
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (err) {
+    spinner.fail("format-commit-msg 腳本執行失敗");
+    throw new Error(`format-commit-msg 腳本的 stdout 不是合法的 JSON：${err.message}`);
+  }
+
+  const formatted = parsed?.message;
+  if (typeof formatted !== "string" || formatted.trim() === "") {
+    spinner.fail("format-commit-msg 腳本執行失敗");
+    throw new Error(
+      `format-commit-msg 腳本的 stdout 必須是 {"message": string}，收到：${trimmed}`
+    );
   }
 
   spinner.succeed("format-commit-msg 腳本執行完成");

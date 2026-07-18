@@ -10,10 +10,12 @@
 # Contract: stdin is JSON:
 #   { "message": "<raw commit message Claude generated>",
 #     "task": {id, ticketId, title, body, status, baseBranch, createdAt, closedAt} }
-# Print the FINAL commit message to stdout — its entire (trimmed) stdout
-# becomes the message passed to `git commit`.
+# stdout MUST be nothing but JSON: { "message": "<final commit message>" }
+# — same "stdout is pure data, everything else goes to stderr" rule as
+# every other hook. Any stray text on stdout breaks JSON parsing and
+# aborts the commit instead of silently becoming part of the message.
 #
-# Requires `jq` to parse the JSON payload.
+# Requires `jq` to parse the JSON payload and build the JSON response.
 #
 # This hook is optional: if neither .coder/hooks/format-commit-msg nor
 # format-commit-msg.js exists, `coder commit` uses Claude's message as-is.
@@ -26,7 +28,9 @@ message="$(jq -r '.message' <<<"$payload")"
 ticket_id="$(jq -r '.task.ticketId // empty' <<<"$payload")"
 
 if [[ -n "$ticket_id" ]]; then
-  printf '%s\n\nRefs: %s\n' "$message" "$ticket_id"
+  formatted="$(printf '%s\n\nRefs: %s' "$message" "$ticket_id")"
 else
-  printf '%s\n' "$message"
+  formatted="$message"
 fi
+
+jq -n --arg message "$formatted" '{message: $message}'
