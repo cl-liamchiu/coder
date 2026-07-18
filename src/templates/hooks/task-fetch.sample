@@ -6,8 +6,10 @@
 # can pick up next. Replace the body below with a real integration
 # (Linear, Jira, GitHub Issues, a local file, ...).
 #
-# Contract: the LAST line printed to stdout MUST be a JSON array string,
-# where each item looks like:
+# Contract: stdout MUST be nothing but a JSON array string (the whole
+# stream is parsed as one JSON document, so pretty-printed multi-line JSON
+# is fine — just don't print anything else to stdout). Each item looks
+# like:
 #   {
 #     "ticketId"?: string | null,
 #     "title": string,
@@ -16,9 +18,11 @@
 #     "status"?: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "ON_HOLD" | "REJECTED" | "DONE"
 #   }
 #
-# The array MUST be printed on a single line — pretty-printed JSON spans
-# multiple lines, so the last line alone (e.g. "]") would not be valid JSON
-# on its own and `coder fetch` would fail to parse it.
+# Progress bars, debug logs, prompts — anything that isn't the data itself —
+# must go to stderr instead. `coder fetch` inherits this script's stderr
+# straight through to the terminal but only ever reads stdout, so anything
+# printed there (even one stray line) breaks JSON parsing and fails the
+# whole `coder fetch` run loudly.
 #
 # status is optional and defaults to TODO when omitted — a source can send
 # it explicitly (e.g. ON_HOLD) to pause a task without an agent picking it

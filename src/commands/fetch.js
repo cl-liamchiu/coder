@@ -83,23 +83,26 @@ function runHook(hookPath) {
   }
 }
 
+// stdout is treated as pure data end-to-end: any progress/debug text a hook
+// wants to print belongs on stderr (which is inherited straight through to
+// the terminal, see runHook above). That means the entirety of stdout must
+// be the JSON array — not just its last line — so stray text anywhere in it
+// fails loudly here instead of being silently ignored.
 function parseTaskArray(stdout) {
-  const lines = stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
-  if (lines.length === 0) {
+  const trimmed = stdout.trim();
+  if (trimmed === "") {
     throw new Error("task-fetch 腳本沒有任何標準輸出");
   }
 
-  const lastLine = lines[lines.length - 1];
-
   let parsed;
   try {
-    parsed = JSON.parse(lastLine);
+    parsed = JSON.parse(trimmed);
   } catch (err) {
-    throw new Error(`task-fetch 腳本最後一行輸出不是合法的 JSON：${err.message}`);
+    throw new Error(`task-fetch 腳本的 stdout 不是合法的 JSON：${err.message}`);
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error("task-fetch 腳本最後一行輸出必須是 JSON 陣列");
+    throw new Error("task-fetch 腳本的 stdout 必須是 JSON 陣列");
   }
 
   return parsed;
