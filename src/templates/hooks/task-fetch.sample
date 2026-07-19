@@ -6,9 +6,11 @@
 # can pick up next. Replace the body below with a real integration
 # (Linear, Jira, GitHub Issues, a local file, ...).
 #
-# Contract: stdout MUST be nothing but a JSON array string (the whole
-# stream is parsed as one JSON document, so pretty-printed multi-line JSON
-# is fine — just don't print anything else to stdout). Each item looks
+# Contract: coder creates an empty temp file and passes its path as $1.
+# Write the result into that file — overwrite it with JSON:
+#   { "tasks": [ { ... }, ... ] }
+# (pretty-printed multi-line JSON is fine, coder reads the whole file as
+# one JSON document after this script exits). Each item in "tasks" looks
 # like:
 #   {
 #     "ticketId"?: string | null,
@@ -18,11 +20,10 @@
 #     "status"?: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "ON_HOLD" | "REJECTED" | "DONE"
 #   }
 #
-# Progress bars, debug logs, prompts — anything that isn't the data itself —
-# must go to stderr instead. `coder fetch` inherits this script's stderr
-# straight through to the terminal but only ever reads stdout, so anything
-# printed there (even one stray line) breaks JSON parsing and fails the
-# whole `coder fetch` run loudly.
+# stdin/stdout/stderr are all left connected to the real terminal — coder
+# never reads them. Print progress bars, debug logs, whatever you want, or
+# prompt interactively (e.g. `read` for an auth token) — none of it can
+# corrupt the data, since the data only ever lives in the file at $1.
 #
 # status is optional and defaults to TODO when omitted — a source can send
 # it explicitly (e.g. ON_HOLD) to pause a task without an agent picking it
@@ -39,4 +40,8 @@
 
 set -euo pipefail
 
-echo '[{"ticketId":"EXAMPLE-123","title":"Example task","body":"Replace .coder/hooks/task-fetch with real task-fetching logic.","baseBranch":"main"}]'
+data_file="$1"
+
+cat > "$data_file" <<'EOF'
+{"tasks":[{"ticketId":"EXAMPLE-123","title":"Example task","body":"Replace .coder/hooks/task-fetch with real task-fetching logic.","baseBranch":"main"}]}
+EOF

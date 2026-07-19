@@ -4,7 +4,13 @@ import Database from "better-sqlite3";
 import { createSpinner } from "../spinner.js";
 import pc from "picocolors";
 
-import { resolveHook, execHook } from "../hooks.js";
+import {
+  resolveHook,
+  execHook,
+  createHookDataFile,
+  readHookDataFile,
+  cleanupHookDataFile,
+} from "../hooks.js";
 import { assertManuallySettableStatus } from "../statuses.js";
 
 export function registerFetchCommand(program) {
@@ -33,8 +39,8 @@ function runTaskFetch() {
     }
 
     const hookPath = resolveHook(hooksDir, "task-fetch", { required: true });
-    const stdout = runHook(hookPath);
-    const tasks = parseTaskArray(stdout);
+    const dataFileContent = runHook(hookPath);
+    const tasks = parseTaskArray(dataFileContent);
 
     const db = new Database(dbPath);
     let added = 0;
@@ -67,45 +73,48 @@ function runTaskFetch() {
   }
 }
 
+// Data exchange follows Git's own commit-msg convention (see hooks.js):
+// coder creates an empty temp file, passes its path as $1, and the hook
+// writes { "tasks": [...] } into that file. stdin/stdout/stderr are left
+// fully inherited — the hook is free to print progress or prompt
+// interactively (e.g. an auth token) without any risk of corrupting data.
 function runHook(hookPath) {
   const spinner = createSpinner("執行 task-fetch 腳本 ...").start();
 
+  const dataFile = createHookDataFile();
   try {
-    const stdout = execHook(hookPath, [], {
-      stdio: ["inherit", "pipe", "inherit"],
-    });
+    try {
+      execHook(hookPath, [dataFile], { stdio: "inherit" });
+    } catch (err) {
+      spinner.fail("task-fetch 腳本執行失敗");
+      throw new Error(`task-fetch 執行失敗：${err.message}`);
+    }
 
     spinner.succeed("task-fetch 腳本執行完成");
-    return stdout.toString("utf8");
-  } catch (err) {
-    spinner.fail("task-fetch 腳本執行失敗");
-    throw new Error(`task-fetch 執行失敗：${err.message}`);
+    return readHookDataFile(dataFile);
+  } finally {
+    cleanupHookDataFile(dataFile);
   }
 }
 
-// stdout is treated as pure data end-to-end: any progress/debug text a hook
-// wants to print belongs on stderr (which is inherited straight through to
-// the terminal, see runHook above). That means the entirety of stdout must
-// be the JSON array — not just its last line — so stray text anywhere in it
-// fails loudly here instead of being silently ignored.
-function parseTaskArray(stdout) {
-  const trimmed = stdout.trim();
+function parseTaskArray(dataFileContent) {
+  const trimmed = dataFileContent.trim();
   if (trimmed === "") {
-    throw new Error("task-fetch 腳本沒有任何標準輸出");
+    throw new Error("task-fetch 腳本沒有把任何內容寫回資料檔");
   }
 
   let parsed;
   try {
     parsed = JSON.parse(trimmed);
   } catch (err) {
-    throw new Error(`task-fetch 腳本的 stdout 不是合法的 JSON：${err.message}`);
+    throw new Error(`task-fetch 腳本寫回資料檔的內容不是合法的 JSON：${err.message}`);
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error("task-fetch 腳本的 stdout 必須是 JSON 陣列");
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.tasks)) {
+    throw new Error('task-fetch 腳本寫回資料檔的內容必須是 { "tasks": [...] }');
   }
 
-  return parsed;
+  return parsed.tasks;
 }
 
 function syncOneTask(db, task) {

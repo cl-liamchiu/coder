@@ -7,22 +7,28 @@
 # with your own formatting rules (e.g. enforce a project-specific
 # footer/trailer, run it through a linter...).
 #
-# Contract: stdin is JSON:
+# Contract: coder seeds a temp file with JSON and passes its path as $1:
 #   { "message": "<raw commit message Claude generated>",
 #     "task": {id, ticketId, title, body, status, baseBranch, createdAt, closedAt} }
-# stdout MUST be nothing but JSON: { "message": "<final commit message>" }
-# — same "stdout is pure data, everything else goes to stderr" rule as
-# every other hook. Any stray text on stdout breaks JSON parsing and
-# aborts the commit instead of silently becoming part of the message.
+# Overwrite that same file in place with JSON: { "message": "<final commit
+# message>" } (multi-line message is fine). coder reads the file after this
+# script exits and parses it — the request and response are both JSON for a
+# consistent contract across every hook.
 #
-# Requires `jq` to parse the JSON payload and build the JSON response.
+# stdin/stdout/stderr are all left connected to the real terminal — coder
+# never reads them, so print/prompt freely without any risk of corrupting
+# the message.
+#
+# Requires `jq` to parse the incoming JSON payload and build the JSON
+# response.
 #
 # This hook is optional: if neither .coder/hooks/format-commit-msg nor
 # format-commit-msg.js exists, `coder commit` uses Claude's message as-is.
 
 set -euo pipefail
 
-payload="$(cat)"
+data_file="$1"
+payload="$(cat "$data_file")"
 
 message="$(jq -r '.message' <<<"$payload")"
 ticket_id="$(jq -r '.task.ticketId // empty' <<<"$payload")"
@@ -33,4 +39,4 @@ else
   formatted="$message"
 fi
 
-jq -n --arg message "$formatted" '{message: $message}'
+jq -n --arg message "$formatted" '{message: $message}' > "$data_file"

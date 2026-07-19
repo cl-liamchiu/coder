@@ -4,19 +4,27 @@
 #
 # coder calls this script after a task's status transitions to DONE.
 #
-# Contract: stdin is the full task row as JSON: {id, ticketId, title, body,
-# status, baseBranch, createdAt, closedAt}.
+# Contract: coder seeds a temp file with JSON and passes its path as $1:
+#   { "task": {id, ticketId, title, body, status: "DONE", baseBranch, createdAt, closedAt} }
+# No response expected — this hook's data file is never read back. stdin is
+# left connected to the real terminal on purpose (not piped, not written
+# to), so this hook is free to prompt the person running `coder close`
+# interactively (confirmations, filling out a form, etc.) with a plain
+# `read`.
 #
-# Requires `jq` to parse the JSON payload.
+# Requires `jq` to parse the incoming JSON payload.
 
 set -euo pipefail
 
-task_json="$(cat)"
+data_file="$1"
+payload="$(cat "$data_file")"
 
-task_id="$(jq -r '.id' <<<"$task_json")"
-ticket_id="$(jq -r '.ticketId // "-"' <<<"$task_json")"
-title="$(jq -r '.title' <<<"$task_json")"
+task_id="$(jq -r '.task.id' <<<"$payload")"
+ticket_id="$(jq -r '.task.ticketId // "-"' <<<"$payload")"
+title="$(jq -r '.task.title' <<<"$payload")"
 
 echo "[post-close] task #${task_id} (${ticket_id}) closed: ${title}"
 
 # TODO: notify your task tracker / trigger downstream automation here.
+# stdin is the real terminal, so interactive prompts work normally, e.g.:
+#   read -p "File a follow-up bug report? [y/n] " answer

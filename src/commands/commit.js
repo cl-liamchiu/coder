@@ -7,7 +7,13 @@ import pc from "picocolors";
 
 import { runClaudeAgent } from "../claude.js";
 import { resolveTask as resolveTaskRow, validateTaskSelector } from "../tasks.js";
-import { resolveHook, execHook } from "../hooks.js";
+import {
+  resolveHook,
+  execHook,
+  createHookDataFile,
+  readHookDataFile,
+  cleanupHookDataFile,
+} from "../hooks.js";
 
 export function registerCommitCommand(program) {
   program
@@ -137,13 +143,14 @@ function commitStaged(workDir, commitMessage) {
 // valid message to commit with, so better to stop loudly than commit
 // something unformatted.
 //
-// stdout is JSON, same as every other hook's data-carrying stream (see
-// task-fetch's parseTaskArray): { "message": "<final commit message>" }.
-// A plain-text contract here couldn't tell a stray debug line the hook
-// forgot to send to stderr apart from real message content — any non-empty
-// stdout would silently become part of (or the whole of) the commit
-// message. Requiring JSON means that stray text breaks JSON.parse and
-// fails loudly instead of getting committed.
+// Data exchange follows Git's own commit-msg convention (see hooks.js):
+// coder seeds a temp file, passes its path as $1, and the hook overwrites
+// that same file in place. stdin/stdout/stderr are left fully inherited —
+// the hook is free to print progress or prompt the person running
+// `coder commit`.
+//
+// Both request and response are JSON — { message, task } in, { message }
+// out — for one consistent contract across all three hooks.
 function formatCommitMessage(coderDir, workDir, rawMessage, task) {
   const hooksDir = path.join(coderDir, "hooks");
   const hookPath = resolveHook(hooksDir, "format-commit-msg", { required: false });
@@ -153,42 +160,40 @@ function formatCommitMessage(coderDir, workDir, rawMessage, task) {
 
   const spinner = createSpinner("執行 format-commit-msg 腳本 ...").start();
 
-  const payload = JSON.stringify({ message: rawMessage, task });
-
-  let stdout;
+  const dataFile = createHookDataFile(JSON.stringify({ message: rawMessage, task }));
   try {
-    stdout = execHook(hookPath, [], {
-      cwd: workDir,
-      input: payload,
-      encoding: "utf8",
-    });
-  } catch (err) {
-    spinner.fail("format-commit-msg 腳本執行失敗");
-    throw new Error(`format-commit-msg 執行失敗：${err.message}`);
-  }
+    try {
+      execHook(hookPath, [dataFile], { cwd: workDir, stdio: "inherit" });
+    } catch (err) {
+      spinner.fail("format-commit-msg 腳本執行失敗");
+      throw new Error(`format-commit-msg 執行失敗：${err.message}`);
+    }
 
-  const trimmed = stdout.trim();
-  if (trimmed === "") {
-    spinner.fail("format-commit-msg 腳本沒有輸出任何內容");
-    throw new Error("format-commit-msg 腳本的 stdout 為空，無法作為 commit message");
-  }
+    const trimmed = readHookDataFile(dataFile).trim();
+    if (trimmed === "") {
+      spinner.fail("format-commit-msg 腳本沒有把任何內容寫回資料檔");
+      throw new Error("format-commit-msg 腳本的資料檔為空，無法作為 commit message");
+    }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch (err) {
-    spinner.fail("format-commit-msg 腳本執行失敗");
-    throw new Error(`format-commit-msg 腳本的 stdout 不是合法的 JSON：${err.message}`);
-  }
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (err) {
+      spinner.fail("format-commit-msg 腳本執行失敗");
+      throw new Error(`format-commit-msg 腳本寫回資料檔的內容不是合法的 JSON：${err.message}`);
+    }
 
-  const formatted = parsed?.message;
-  if (typeof formatted !== "string" || formatted.trim() === "") {
-    spinner.fail("format-commit-msg 腳本執行失敗");
-    throw new Error(
-      `format-commit-msg 腳本的 stdout 必須是 {"message": string}，收到：${trimmed}`
-    );
-  }
+    const formatted = parsed?.message;
+    if (typeof formatted !== "string" || formatted.trim() === "") {
+      spinner.fail("format-commit-msg 腳本執行失敗");
+      throw new Error(
+        `format-commit-msg 腳本寫回資料檔的內容必須是 { "message": string }，收到：${trimmed}`
+      );
+    }
 
-  spinner.succeed("format-commit-msg 腳本執行完成");
-  return formatted;
+    spinner.succeed("format-commit-msg 腳本執行完成");
+    return formatted;
+  } finally {
+    cleanupHookDataFile(dataFile);
+  }
 }

@@ -8,7 +8,12 @@ import pc from "picocolors";
 import { resolveTask, validateTaskSelector, updateTaskById } from "../tasks.js";
 import { resolveSandbox } from "../config.js";
 import { taskBranchName, parseTaskBranchName } from "../branch.js";
-import { resolveHook, execHook } from "../hooks.js";
+import {
+  resolveHook,
+  execHook,
+  createHookDataFile,
+  cleanupHookDataFile,
+} from "../hooks.js";
 
 export function registerCloseCommand(program) {
   program
@@ -226,24 +231,27 @@ function cleanupBranches({ projectRoot, sandboxPath, branchName, baseBranch }) {
   }
 }
 
-// Optional — closing a task without this hook configured is fine. The full
-// task row (id, ticketId, title, body, status: 'DONE', baseBranch,
-// createdAt, closedAt) is passed as JSON on stdin — a single source of
-// truth, so the hook can act on any field without having to query
-// .coder/tasks.db itself.
+// Optional — closing a task without this hook configured is fine. Data
+// exchange follows the same convention as the other two hooks (see
+// hooks.js): coder seeds a temp file with { "task": {...} } (the full,
+// just-updated row) and passes its path as $1. stdin is left fully
+// `inherit`ed (not piped, not written to), so the hook is free to interact
+// with the person running `coder close` (confirmations, filling out a
+// form, etc.) with a plain `read`. Best-effort — any failure here is just a
+// warning, since the task is already DONE by this point.
 function runPostCloseHook(coderDir, task) {
   const hooksDir = path.join(coderDir, "hooks");
   const hookPath = resolveHook(hooksDir, "post-close", { required: false });
   if (!hookPath) return;
 
   const spinner = createSpinner("執行 post-close 腳本 ...").start();
+  const dataFile = createHookDataFile(JSON.stringify({ task }));
   try {
-    execHook(hookPath, [], {
-      stdio: ["pipe", "inherit", "inherit"],
-      input: JSON.stringify(task),
-    });
+    execHook(hookPath, [dataFile], { stdio: "inherit" });
     spinner.succeed("post-close 腳本執行完成");
   } catch (err) {
     spinner.warn(`post-close 腳本執行失敗（已略過）：${err.message}`);
+  } finally {
+    cleanupHookDataFile(dataFile);
   }
 }
