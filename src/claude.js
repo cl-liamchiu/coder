@@ -12,27 +12,29 @@
 // instead of an animated spinner around this call — see runClaudeOnTask()
 // in run.js and generateCommitMessage() in commit.js.
 
+import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 
 export function runClaudeAgent({ cwd, promptPath, settingsPath, stdinInput, sessionId }) {
-  const args = [
-    "-p",
-    "--append-system-prompt-file",
-    promptPath,
-    "--output-format",
-    "json",
-    "--settings",
-    settingsPath,
-  ];
+  const args = ["-p", "--output-format", "json", "--settings", settingsPath];
+
+  // --append-system-prompt-file is silently ignored when --resume is used —
+  // Claude CLI only applies the system prompt on session creation, not on
+  // resume — so when continuing a session, fold the prompt file into stdin
+  // instead of relying on that flag.
+  let input = stdinInput;
   if (sessionId) {
     args.push("--resume", sessionId);
+    input = `${fs.readFileSync(promptPath, "utf8")}\n\n${stdinInput}`;
+  } else {
+    args.push("--append-system-prompt-file", promptPath);
   }
 
   let stdout;
   try {
     stdout = execFileSync("claude", args, {
       cwd,
-      input: stdinInput,
+      input,
       encoding: "utf8",
     });
   } catch (err) {

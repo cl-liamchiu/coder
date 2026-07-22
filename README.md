@@ -136,7 +136,7 @@ coder commit <ticketId> [--sessionId <sessionId>]
 3. 如果存在 `.coder/hooks/format-commit-msg`（或 `.js`），把 `{"message": <Claude 產生的原始訊息>, "task": {...任務完整欄位}}` 這包 JSON 寫進一個暫存檔、路徑當參數傳給它，讀回它覆寫後的 `{"message": "..."}` 當最終訊息（細節見下方 Hooks 章節；這個 hook 失敗會直接中止 commit）
 4. `git commit`
 
-`--sessionId` 會轉成 `claude --resume`，用來接續 `coder run` 裡跑任務時的 session。
+`--sessionId` 會轉成 `claude --resume`，用來接續 `coder run` 裡跑任務時的 session。`--resume` 時 `--append-system-prompt-file` 會被 Claude CLI 忽略（系統提示只在建立 session 當下生效），所以有 `--sessionId` 時改把 `.coder/prompts/commit.md` 的內容和 title/body 一起併進 stdin、不再傳 `--append-system-prompt-file`。
 
 **`CODER_PROJECT_ROOT`**：`coder commit` 的 git 操作永遠對 `process.cwd()` 動作，但找 `.coder/`（tasks.db、prompts、hooks）預設也是用 cwd —— 除非設了 `CODER_PROJECT_ROOT` 環境變數，這時候會改去那個路徑找控制平面檔案。這是為了讓 `coder run` 能在沙盒目錄（cwd）裡呼叫 `coder commit`，同時讓它讀到主專案（`CODER_PROJECT_ROOT`）的任務資料。一般手動使用不需要設這個。
 
