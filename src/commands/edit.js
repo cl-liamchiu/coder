@@ -12,6 +12,12 @@ import {
 } from "../statuses.js";
 import { printTask } from "./view.js";
 
+// The interactive picker deliberately excludes DONE — it's reachable only
+// via explicit `--status DONE` so setting it is never one accidental Enter
+// away, but it's still a valid value once typed out (see buildUpdate()'s
+// closedAt stamping below).
+const PICKER_STATUSES = MANUALLY_SETTABLE_STATUSES;
+
 export function registerEditCommand(program) {
   program
     .command("edit [id]")
@@ -22,7 +28,7 @@ export function registerEditCommand(program) {
     .option("-b, --body <body>", "更新內容")
     .option(
       "-s, --status [status]",
-      `更新狀態 (${MANUALLY_SETTABLE_STATUSES.join("/")}；DONE 只能透過 coder close 設定)。不帶值時會跳出選單`
+      `更新狀態 (${MANUALLY_SETTABLE_STATUSES.join("/")}/DONE；DONE 只會更新紀錄與 closedAt，不會執行 coder close 的 git 合併/hook/砍分支，僅適用於已經手動處理完成的任務)。不帶值時會跳出選單（DONE 需明確用 --status DONE 指定，選單不列出）`
     )
     .option("--baseBranch <baseBranch>", "更新 baseBranch")
     .action(async (id, options) => {
@@ -34,24 +40,24 @@ async function promptForStatus() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     console.log(pc.bold("選擇狀態："));
-    MANUALLY_SETTABLE_STATUSES.forEach((status, i) => {
+    PICKER_STATUSES.forEach((status, i) => {
       const color = STATUS_COLORS[status] ?? ((s) => s);
       console.log(`  ${i + 1}) ${color(status)}`);
     });
     for (;;) {
       const answer = (await rl.question("輸入編號或狀態名稱: ")).trim();
-      const byIndex = MANUALLY_SETTABLE_STATUSES[Number(answer) - 1];
+      const byIndex = PICKER_STATUSES[Number(answer) - 1];
       if (byIndex) {
         return byIndex;
       }
-      const byName = MANUALLY_SETTABLE_STATUSES.find(
+      const byName = PICKER_STATUSES.find(
         (s) => s.toLowerCase() === answer.toLowerCase()
       );
       if (byName) {
         return byName;
       }
       console.log(
-        pc.red(`無效輸入，請輸入 1-${MANUALLY_SETTABLE_STATUSES.length} 的編號或狀態名稱`)
+        pc.red(`無效輸入，請輸入 1-${PICKER_STATUSES.length} 的編號或狀態名稱`)
       );
     }
   } finally {
@@ -79,7 +85,7 @@ async function runEdit(id, options) {
     // `options.status &&` check would treat "" as "not provided" and let
     // it through to buildUpdate() as-is, writing an invalid status.
     if (options.status !== undefined) {
-      assertManuallySettableStatus(options.status);
+      assertManuallySettableStatus(options.status, undefined, { allowDone: true });
     }
 
     const { fields, params } = buildUpdate(options);
@@ -124,6 +130,11 @@ function buildUpdate(options) {
   if (options.status !== undefined) {
     fields.push("status = ?");
     params.push(options.status);
+    // Mirrors close.js's markTaskDone() — DONE always carries a closedAt,
+    // whether it got there via `coder close` or a manual correction here.
+    if (options.status === "DONE") {
+      fields.push("closedAt = CURRENT_TIMESTAMP");
+    }
   }
   if (options.baseBranch !== undefined) {
     fields.push("baseBranch = ?");
